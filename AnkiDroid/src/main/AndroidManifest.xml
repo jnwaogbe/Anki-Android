@@ -271,17 +271,6 @@
                 android:resource="@xml/preferences_searchable"
                 />
         </activity>
-<!--        <activity-->
-<!--            android:name="com.ichi2.anki.PreferencesSearch"-->
-<!--            android:label="Preferences Search"-->
-<!--            android:exported="false"-->
-<!--            android:configChanges="keyboardHidden|orientation|locale|screenSize"-->
-<!--            android:theme="@style/LegacyActionBarLight"-->
-<!--            >-->
-<!--            <intent-filter>-->
-<!--                <action android:name="android.intent.action.SEARCH" />-->
-<!--            </intent-filter>-->
-<!--        </activity>-->
         <activity
             android:name="com.ichi2.anki.DeckOptions"
             android:label="@string/deckpreferences_title"

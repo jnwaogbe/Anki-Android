@@ -113,7 +113,7 @@ import static com.ichi2.anim.ActivityTransitionAnimation.Direction.FADE;
 /**
  * Preferences dialog.
  */
-public class Preferences extends AnkiActivity implements MaterialSearchBar.OnSearchActionListener {
+public class Preferences extends AnkiActivity {
 
     /**
      * Key of the language preference
@@ -608,24 +608,6 @@ public class Preferences extends AnkiActivity implements MaterialSearchBar.OnSea
         return mOriginalSumarries.keySet();
     }
 
-
-    @Override
-    public void onSearchStateChanged(boolean enabled) {
-
-    }
-
-
-    @Override
-    public void onSearchConfirmed(CharSequence text) {
-
-    }
-
-
-    @Override
-    public void onButtonClicked(int buttonCode) {
-
-    }
-
     // ----------------------------------------------------------------------------
     // Inner classes
     // ----------------------------------------------------------------------------
@@ -640,7 +622,6 @@ public class Preferences extends AnkiActivity implements MaterialSearchBar.OnSea
             }
         }
     }
-
 
 
     public abstract static class SettingsFragment extends PreferenceFragmentCompat implements OnSharedPreferenceChangeListener {
