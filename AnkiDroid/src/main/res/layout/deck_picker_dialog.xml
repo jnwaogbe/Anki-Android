@@ -42,9 +42,10 @@
         android:textIsSelectable="false"
         android:layout_below="@id/deck_picker_dialog_toolbar"/>
 
-    <androidx.recyclerview.widget.RecyclerView android:id="@+id/deck_picker_dialog_list"
-                                               android:scrollbars="vertical"
-                                               android:layout_width="match_parent"
-                                               android:layout_height="wrap_content"
-                                               android:layout_below="@id/deck_picker_dialog_summary"/>
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/deck_picker_dialog_list"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/deck_picker_dialog_summary"
+        android:scrollbars="vertical" />
 </RelativeLayout>

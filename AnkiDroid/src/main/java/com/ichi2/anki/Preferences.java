@@ -24,6 +24,7 @@ import android.app.Activity;
 import android.app.AlarmManager;
 import android.app.AlertDialog;
 import android.app.PendingIntent;
+import android.app.SearchManager;
 import android.content.ActivityNotFoundException;
 import android.content.ComponentName;
 import android.content.Context;
@@ -36,6 +37,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.text.TextUtils;
+import android.view.Menu;
 import android.view.MenuItem;
 import android.view.WindowManager.BadTokenException;
 import android.webkit.URLUtil;
@@ -68,11 +70,13 @@ import com.ichi2.utils.AdaptionUtil;
 import com.ichi2.utils.LanguageUtil;
 import com.ichi2.anki.analytics.UsageAnalytics;
 import com.ichi2.utils.VersionUtils;
+import com.mancj.materialsearchbar.MaterialSearchBar;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.nio.channels.FileChannel;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.HashMap;
@@ -89,6 +93,8 @@ import androidx.annotation.VisibleForTesting;
 import androidx.annotation.XmlRes;
 import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.SearchView;
+import androidx.core.view.MenuItemCompat;
 import androidx.fragment.app.DialogFragment;
 import androidx.fragment.app.Fragment;
 import androidx.preference.CheckBoxPreference;
@@ -106,9 +112,11 @@ import static com.ichi2.anim.ActivityTransitionAnimation.Direction.FADE;
 /**
  * Preferences dialog.
  */
-public class Preferences extends AnkiActivity {
+public class Preferences extends AnkiActivity implements MaterialSearchBar.OnSearchActionListener {
 
-    /** Key of the language preference */
+    /**
+     * Key of the language preference
+     */
     public static final String LANGUAGE = "language";
 
     /* Only enable AnkiDroid notifications unrelated to due reminders */
@@ -164,17 +172,16 @@ public class Preferences extends AnkiActivity {
 
     /**
      * Represents in Android preferences the collection's "Automatic Answer" action.
-     *
+     * <p>
      * An integer representing the action when "Automatic Answer" flips a card from answer to question
-     *
+     * <p>
      * 0 represents "bury", 1-4 represents the named buttons
      *
      * @see com.ichi2.anki.reviewer.AutomaticAnswerAction
-     *
+     * <p>
      * Although AnkiMobile and AnkiDroid have the feature, this config key is currently AnkiDroid only
-     *
+     * <p>
      * We use the same key in the collection config
-     *
      * @see com.ichi2.anki.reviewer.AutomaticAnswerAction#CONFIG_KEY
      */
     private static final String AUTOMATIC_ANSWER_ACTION = "automaticAnswerAction";
@@ -184,10 +191,12 @@ public class Preferences extends AnkiActivity {
      */
     public static final String MINIMUM_CARDS_DUE_FOR_NOTIFICATION = "minimumCardsDueForNotification";
     private static final String NEW_TIMEZONE_HANDLING = "newTimezoneHandling";
-    private static final String [] sCollectionPreferences = {SHOW_ESTIMATE, SHOW_PROGRESS,
+    private static final String[] sCollectionPreferences = {SHOW_ESTIMATE, SHOW_PROGRESS,
             LEARN_CUTOFF, TIME_LIMIT, USE_CURRENT, NEW_SPREAD, DAY_OFFSET, NEW_TIMEZONE_HANDLING, AUTOMATIC_ANSWER_ACTION};
 
-    /** The collection path when Preferences was opened  */
+    /**
+     * The collection path when Preferences was opened
+     */
     private String mOldCollectionPath = null;
 
 
@@ -218,6 +227,65 @@ public class Preferences extends AnkiActivity {
                 .replace(R.id.settings_container, fragment)
                 .commit();
 
+    }
+
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.preferences_search_bar, menu);
+
+        MenuItem menuItem = menu.findItem(R.id.preferences_search);
+
+        SearchManager searchManager = (SearchManager) getSystemService(Context.SEARCH_SERVICE);
+        SearchView searchView = (SearchView) menuItem.getActionView();
+
+        searchView.setQueryHint(getText(R.string.preferences_search_hint));
+        searchView.setSearchableInfo(searchManager.getSearchableInfo(getComponentName()));
+
+        List<String> preferencesList = new ArrayList<>();
+
+        preferencesList.add("Test 1");
+        preferencesList.add("Test 2");
+        preferencesList.add("Test 3");
+        preferencesList.add("Test 4");
+        preferencesList.add("Test 5");
+
+        PreferencesSearchRecyclerAdapter adapter = new PreferencesSearchRecyclerAdapter(preferencesList);
+        PreferencesSearchFragment searchFragment = new PreferencesSearchFragment(adapter);
+
+        searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
+            @Override
+            public boolean onQueryTextSubmit(String s) {
+                //Update contents of the fragment
+                return true;
+            }
+
+            @Override
+            public boolean onQueryTextChange(String s) {
+                adapter.getFilter().filter(s);
+                return true;
+            }
+        });
+
+        menuItem.setOnActionExpandListener(new MenuItem.OnActionExpandListener() {
+            @Override
+            public boolean onMenuItemActionExpand(MenuItem menuItem) {
+                getSupportFragmentManager()
+                        .beginTransaction()
+                        .replace(R.id.settings_container, searchFragment)
+                        .addToBackStack(null)
+                        .commit();
+                return true;
+            }
+
+            @Override
+            public boolean onMenuItemActionCollapse(MenuItem menuItem) {
+                getSupportFragmentManager().popBackStack();
+                return true;
+            }
+        });
+
+        return true;
     }
 
 
@@ -261,6 +329,7 @@ public class Preferences extends AnkiActivity {
         }
     }
 
+
     @SuppressWarnings("deprecation") // startActivity
     protected void restartWithNewDeckPicker() {
         // PERF: DB access on foreground thread
@@ -276,6 +345,7 @@ public class Preferences extends AnkiActivity {
         super.onSaveInstanceState(outState);
         outState.putString("mOldCollectionPath", mOldCollectionPath);
     }
+
 
     @Override
     protected void onRestoreInstanceState(Bundle state) {
@@ -315,7 +385,6 @@ public class Preferences extends AnkiActivity {
     }
 
 
-
     private void initPreference(Preference pref) {
         // Load stored values from Preferences which are stored in the Collection
         if (Arrays.asList(sCollectionPreferences).contains(pref.getKey())) {
@@ -324,31 +393,31 @@ public class Preferences extends AnkiActivity {
                 try {
                     switch (pref.getKey()) {
                         case SHOW_ESTIMATE:
-                            ((CheckBoxPreference)pref).setChecked(col.get_config_boolean("estTimes"));
+                            ((CheckBoxPreference) pref).setChecked(col.get_config_boolean("estTimes"));
                             break;
                         case SHOW_PROGRESS:
-                            ((CheckBoxPreference)pref).setChecked(col.get_config_boolean("dueCounts"));
+                            ((CheckBoxPreference) pref).setChecked(col.get_config_boolean("dueCounts"));
                             break;
                         case LEARN_CUTOFF:
-                            ((NumberRangePreferenceCompat)pref).setValue(col.get_config_int("collapseTime") / 60);
+                            ((NumberRangePreferenceCompat) pref).setValue(col.get_config_int("collapseTime") / 60);
                             break;
                         case TIME_LIMIT:
-                            ((NumberRangePreferenceCompat)pref).setValue(col.get_config_int("timeLim") / 60);
+                            ((NumberRangePreferenceCompat) pref).setValue(col.get_config_int("timeLim") / 60);
                             break;
                         case USE_CURRENT:
-                            ((ListPreference)pref).setValueIndex(col.get_config("addToCur", true) ? 0 : 1);
+                            ((ListPreference) pref).setValueIndex(col.get_config("addToCur", true) ? 0 : 1);
                             break;
                         case AUTOMATIC_ANSWER_ACTION:
-                            ((ListPreference)pref).setValueIndex(col.get_config(AutomaticAnswerAction.CONFIG_KEY, 0));
+                            ((ListPreference) pref).setValueIndex(col.get_config(AutomaticAnswerAction.CONFIG_KEY, 0));
                             break;
                         case NEW_SPREAD:
-                            ((ListPreference)pref).setValueIndex(col.get_config_int("newSpread"));
+                            ((ListPreference) pref).setValueIndex(col.get_config_int("newSpread"));
                             break;
                         case DAY_OFFSET:
-                            ((SeekBarPreferenceCompat)pref).setValue(getDayOffset(col));
+                            ((SeekBarPreferenceCompat) pref).setValue(getDayOffset(col));
                             break;
                         case PASTE_PNG:
-                            ((CheckBoxPreference)pref).setChecked(col.get_config("pastePNG", false));
+                            ((CheckBoxPreference) pref).setChecked(col.get_config("pastePNG", false));
                             break;
                         case NEW_TIMEZONE_HANDLING:
                             CheckBoxPreference checkBox = (CheckBoxPreference) pref;
@@ -376,7 +445,10 @@ public class Preferences extends AnkiActivity {
         updateSummary(pref);
     }
 
-    /** Returns the hour that the collection rolls over to the next day */
+
+    /**
+     * Returns the hour that the collection rolls over to the next day
+     */
     public static int getDayOffset(Collection col) {
         switch (col.schedVer()) {
             default:
@@ -388,7 +460,10 @@ public class Preferences extends AnkiActivity {
         }
     }
 
-    /** Sets the hour that the collection rolls over to the next day */
+
+    /**
+     * Sets the hour that the collection rolls over to the next day
+     */
     @VisibleForTesting
     public void setDayOffset(int hours) {
         switch (getSchedVer(getCol())) {
@@ -429,6 +504,7 @@ public class Preferences extends AnkiActivity {
         listpref.setEntries(entries);
         listpref.setSummary(listpref.getEntry().toString());
     }
+
 
     private void updateSummary(Preference pref) {
         if (pref == null || pref.getKey() == null) {
@@ -499,32 +575,54 @@ public class Preferences extends AnkiActivity {
         }
     }
 
+
     @SuppressWarnings("ResultOfMethodCallIgnored")
     private String replaceStringIfNumeric(String str, String value) {
         try {
             Double.parseDouble(value);
             return replaceString(str, value);
-        } catch (NumberFormatException e){
+        } catch (NumberFormatException e) {
             Timber.w(e);
             return value;
         }
     }
 
+
     @SuppressWarnings("deprecation")
     private void closePreferences() {
         finish();
         ActivityTransitionAnimation.slide(this, FADE);
-        if (getCol() != null && getCol().getDb()!= null) {
+        if (getCol() != null && getCol().getDb() != null) {
             getCol().save();
         }
     }
 
 
-    /** This is not fit for purpose (other than testing a single screen) */
+    /**
+     * This is not fit for purpose (other than testing a single screen)
+     */
     @NonNull
     @VisibleForTesting(otherwise = VisibleForTesting.NONE)
     public Set<String> getLoadedPreferenceKeys() {
         return mOriginalSumarries.keySet();
+    }
+
+
+    @Override
+    public void onSearchStateChanged(boolean enabled) {
+
+    }
+
+
+    @Override
+    public void onSearchConfirmed(CharSequence text) {
+
+    }
+
+
+    @Override
+    public void onButtonClicked(int buttonCode) {
+
     }
 
     // ----------------------------------------------------------------------------
@@ -542,6 +640,8 @@ public class Preferences extends AnkiActivity {
         }
     }
 
+
+
     public abstract static class SettingsFragment extends PreferenceFragmentCompat implements OnSharedPreferenceChangeListener {
         @Override
         public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
@@ -551,7 +651,10 @@ public class Preferences extends AnkiActivity {
             ((Preferences) getActivity()).initAllPreferences(getPreferenceScreen());
         }
 
-        /** Obtains a non-null reference to the preference defined by the key, or throws */
+
+        /**
+         * Obtains a non-null reference to the preference defined by the key, or throws
+         */
         @NonNull
         @SuppressWarnings("unchecked")
         protected <T extends Preference> T requirePreference(String key) {
@@ -562,7 +665,10 @@ public class Preferences extends AnkiActivity {
             return (T) preference;
         }
 
-        /** Obtains a non-null reference to the preference defined by the key, or throws */
+
+        /**
+         * Obtains a non-null reference to the preference defined by the key, or throws
+         */
         @NonNull
         @SuppressWarnings("unchecked")
         protected static <T extends Preference> T requirePreference(PreferenceScreen screen, String key) {
@@ -572,6 +678,7 @@ public class Preferences extends AnkiActivity {
             }
             return (T) preference;
         }
+
 
         @NonNull
         protected abstract String getAnalyticsScreenNameConstant();
@@ -596,11 +703,13 @@ public class Preferences extends AnkiActivity {
             updatePreference(((Preferences) getActivity()), prefs, "advanced_statistics_link");
         }
 
+
         @Override
         public void onPause() {
             getPreferenceManager().getSharedPreferences().unregisterOnSharedPreferenceChangeListener(this);
             super.onPause();
         }
+
 
         @Override
         public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
@@ -637,9 +746,10 @@ public class Preferences extends AnkiActivity {
 
         /**
          * Code which is run when a SharedPreference change has been detected
+         *
          * @param preferencesActivity A handle to the calling activity
-         * @param prefs instance of SharedPreferences
-         * @param key key in prefs which is being updated
+         * @param prefs               instance of SharedPreferences
+         * @param key                 key in prefs which is being updated
          */
         private void updatePreference(Preferences preferencesActivity, SharedPreferences prefs, String key) {
             try {
@@ -748,7 +858,7 @@ public class Preferences extends AnkiActivity {
                         pm.setComponentEnabledSetting(providerName, state, PackageManager.DONT_KILL_APP);
                         break;
                     }
-                    case NEW_TIMEZONE_HANDLING : {
+                    case NEW_TIMEZONE_HANDLING: {
                         if (preferencesActivity.getCol().schedVer() != 1 && preferencesActivity.getCol().isUsingRustBackend()) {
                             AbstractSched sched = preferencesActivity.getCol().getSched();
                             boolean was_enabled = sched._new_timezone_enabled();
@@ -787,20 +897,25 @@ public class Preferences extends AnkiActivity {
         }
     }
 
+
+
     /**
      * Temporary abstraction
      * Due to deprecation, we need to move from all Preference code in the Preference activity
      * into separate fragments.
-     *
+     * <p>
      * Fragments will inherit from this class
-     *
+     * <p>
      * This class adds methods which were previously in Preferences, and are now shared between Settings Fragments
      * To be merged with SettingsFragment once it can be made abstract
      */
     public abstract static class SpecificSettingsFragment extends SettingsFragment {
-        /** @return The XML file which defines the preferences displayed by this PreferenceFragment */
+        /**
+         * @return The XML file which defines the preferences displayed by this PreferenceFragment
+         */
         @XmlRes
         public abstract int getPreferenceResource();
+
 
         /**
          * Refreshes all values on the screen
@@ -811,10 +926,12 @@ public class Preferences extends AnkiActivity {
             initSubscreen();
         }
 
+
         @Nullable
         protected Collection getCol() {
             return CollectionHelper.getInstance().getCol(requireContext());
         }
+
 
         @NonNull
         protected static Intent getSubscreenIntent(Context context, String className) {
@@ -823,7 +940,10 @@ public class Preferences extends AnkiActivity {
             return i;
         }
 
-        /** Sets the title of the window to the provided string */
+
+        /**
+         * Sets the title of the window to the provided string
+         */
         protected void setTitle(@StringRes int stringRes) {
             Activity activity = getActivity();
 
@@ -844,12 +964,15 @@ public class Preferences extends AnkiActivity {
             supportActionBar.setTitle(stringRes);
         }
 
+
         /**
          * Loads preferences (via addPreferencesFromResource) and sets up appropriate listeners for the preferences
          * Called by base class, do not call directly.
          */
         protected abstract void initSubscreen();
     }
+
+
 
     public static class GeneralSettingsFragment extends SpecificSettingsFragment {
         @Override
@@ -880,6 +1003,7 @@ public class Preferences extends AnkiActivity {
             initializeLanguageDialog(screen);
         }
 
+
         private void initializeLanguageDialog(PreferenceScreen screen) {
             ListPreference languageSelection = screen.findPreference(LANGUAGE);
             if (languageSelection != null) {
@@ -904,6 +1028,8 @@ public class Preferences extends AnkiActivity {
             }
         }
     }
+
+
 
     public static class ReviewingSettingsFragment extends SpecificSettingsFragment {
         @Override
@@ -936,6 +1062,8 @@ public class Preferences extends AnkiActivity {
             });
         }
     }
+
+
 
     public static class AppearanceSettingsFragment extends SpecificSettingsFragment {
 
@@ -989,7 +1117,10 @@ public class Preferences extends AnkiActivity {
             initializeCustomFontsDialog();
         }
 
-        /** Initializes the list of custom fonts shown in the preferences. */
+
+        /**
+         * Initializes the list of custom fonts shown in the preferences.
+         */
         private void initializeCustomFontsDialog() {
             ListPreference defaultFontPreference = requirePreference("defaultFont");
             defaultFontPreference.setEntries(getCustomFonts("System default"));
@@ -999,7 +1130,10 @@ public class Preferences extends AnkiActivity {
             browserEditorCustomFontsPreference.setEntryValues(getCustomFonts("", true));
         }
 
-        /** Returns a list of the names of the installed custom fonts. */
+
+        /**
+         * Returns a list of the names of the installed custom fonts.
+         */
         private String[] getCustomFonts(String defaultValue) {
             return getCustomFonts(defaultValue, false);
         }
@@ -1025,6 +1159,7 @@ public class Preferences extends AnkiActivity {
             return names;
         }
 
+
         @SuppressWarnings("deprecation")
         @Override
         public void onActivityResult(int requestCode, int resultCode, Intent data) {
@@ -1033,7 +1168,7 @@ public class Preferences extends AnkiActivity {
             try {
                 if (requestCode == RESULT_LOAD_IMG && resultCode == RESULT_OK && null != data) {
                     Uri selectedImage = data.getData();
-                    String[] filePathColumn = { MediaStore.MediaColumns.SIZE };
+                    String[] filePathColumn = {MediaStore.MediaColumns.SIZE};
                     try (Cursor cursor = requireContext().getContentResolver().query(selectedImage, filePathColumn, null, null, null)) {
                         cursor.moveToFirst();
                         // file size in MB
@@ -1065,6 +1200,8 @@ public class Preferences extends AnkiActivity {
         }
     }
 
+
+
     public static class GesturesSettingsFragment extends SpecificSettingsFragment {
         @Override
         public int getPreferenceResource() {
@@ -1086,9 +1223,11 @@ public class Preferences extends AnkiActivity {
             updateGestureCornerTouch(screen);
         }
 
+
         private void updateGestureCornerTouch(PreferenceScreen screen) {
             updateGestureCornerTouch(requireContext(), screen);
         }
+
 
         public static void updateGestureCornerTouch(Context context, PreferenceScreen screen) {
             boolean gestureCornerTouch = AnkiDroidApp.getSharedPrefs(context).getBoolean("gestureCornerTouch", false);
@@ -1106,12 +1245,15 @@ public class Preferences extends AnkiActivity {
         }
     }
 
+
+
     public static class AdvancedSettingsFragment extends SpecificSettingsFragment {
 
         @Override
         public int getPreferenceResource() {
             return R.xml.preferences_advanced;
         }
+
 
         @NonNull
         public static Intent getSubscreenIntent(Context context) {
@@ -1282,6 +1424,7 @@ public class Preferences extends AnkiActivity {
             addThirdPartyAppsListener();
         }
 
+
         private void setupContextMenuPreference(String key, @StringRes int contextMenuName) {
             // FIXME: The menu is named in the system language (as it's defined in the manifest which may be
             //  different than the app language
@@ -1291,6 +1434,7 @@ public class Preferences extends AnkiActivity {
             cardBrowserContextMenuPreference.setTitle(getString(R.string.card_browser_enable_external_context_menu, menuName));
             cardBrowserContextMenuPreference.setSummary(getString(R.string.card_browser_enable_external_context_menu_summary, menuName));
         }
+
 
         private void removeUnnecessaryAdvancedPrefs() {
             PreferenceCategory plugins = findPreference("category_plugins");
@@ -1330,6 +1474,8 @@ public class Preferences extends AnkiActivity {
             });
         }
     }
+
+
 
     public static class CustomButtonsSettingsFragment extends SpecificSettingsFragment {
 
@@ -1388,12 +1534,15 @@ public class Preferences extends AnkiActivity {
         }
     }
 
+
+
     public static class AdvancedStatisticsSettingsFragment extends SpecificSettingsFragment {
 
         @Override
         public int getPreferenceResource() {
             return R.xml.preferences_advanced_statistics;
         }
+
 
         @NonNull
         @Override
@@ -1409,12 +1558,15 @@ public class Preferences extends AnkiActivity {
         }
     }
 
+
+
     public static class CustomSyncServerSettingsFragment extends SpecificSettingsFragment {
 
         @Override
         public int getPreferenceResource() {
             return R.xml.preferences_custom_sync_server;
         }
+
 
         @NonNull
         public static Intent getSubscreenIntent(Context context) {
@@ -1464,6 +1616,8 @@ public class Preferences extends AnkiActivity {
         }
     }
 
+
+
     public static class ControlsSettingsFragment extends SpecificSettingsFragment {
 
         @Override
@@ -1486,6 +1640,7 @@ public class Preferences extends AnkiActivity {
             ControlPreference.setup(cat);
         }
     }
+
 
     @VisibleForTesting(otherwise = VisibleForTesting.NONE)
     public void attachBaseContext(Context context) {
