@@ -43,6 +43,7 @@ import android.view.ViewGroup;
 import android.webkit.WebView;
 import android.webkit.JavascriptInterface;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -65,14 +66,18 @@ import androidx.vectordrawable.graphics.drawable.VectorDrawableCompat;
 
 import com.ichi2.anki.cardviewer.CardAppearance;
 import com.ichi2.anki.cardviewer.Gesture;
+import com.ichi2.anki.cardviewer.ViewerCommand;
 import com.ichi2.anki.dialogs.ConfirmationDialog;
 import com.ichi2.anki.multimediacard.AudioView;
 import com.ichi2.anki.dialogs.RescheduleDialog;
 import com.ichi2.anki.reviewer.AnswerButtons;
+import com.ichi2.anki.reviewer.AnswerTimer;
 import com.ichi2.anki.reviewer.AutomaticAnswerAction;
+import com.ichi2.anki.reviewer.CardMarker;
 import com.ichi2.anki.reviewer.FullScreenMode;
 import com.ichi2.anki.reviewer.PeripheralKeymap;
 import com.ichi2.anki.reviewer.ReviewerUi;
+import com.ichi2.anki.servicelayer.NoteService;
 import com.ichi2.anki.servicelayer.SchedulerService;
 import com.ichi2.anki.servicelayer.SchedulerService.NextCard;
 import com.ichi2.anki.servicelayer.TaskListenerBuilder;
@@ -87,18 +92,22 @@ import com.ichi2.libanki.sched.Counts;
 import com.ichi2.themes.Themes;
 import com.ichi2.utils.AndroidUiUtils;
 import com.ichi2.utils.Computation;
-import com.ichi2.utils.FunctionalInterfaces.Consumer;
+import com.ichi2.utils.HandlerUtils;
 import com.ichi2.utils.Permissions;
 import com.ichi2.utils.ViewGroupUtils;
 import com.ichi2.widget.WidgetStatus;
 
+import java.io.File;
 import java.lang.ref.WeakReference;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Consumer;
 
 import kotlin.Unit;
 import timber.log.Timber;
 
+import static com.ichi2.anki.cardviewer.ViewerCommand.COMMAND_EXIT;
+import static com.ichi2.anki.cardviewer.ViewerCommand.COMMAND_NOTHING;
 import static com.ichi2.anki.reviewer.CardMarker.*;
 import static com.ichi2.anim.ActivityTransitionAnimation.Direction.*;
 
@@ -121,12 +130,25 @@ public class Reviewer extends AbstractFlashcardViewer {
     private TextView mTextBarLearn;
     private TextView mTextBarReview;
 
+    protected AnswerTimer mAnswerTimer;
+
     private boolean mPrefHideDueCount;
+
+    // Whiteboard
+    protected boolean mPrefWhiteboard;
+    protected Whiteboard mWhiteboard;
+
+    // Record Audio
+    /** File of the temporary mic record **/
+    protected AudioView mMicToolBar;
+    protected String mTempAudioPath;
 
     // ETA
     private int mEta;
     private boolean mPrefShowETA;
 
+    /** Handle Mark/Flag state of cards */
+    private CardMarker mCardMarker;
 
     // Preferences from the collection
     private boolean mShowRemainingCardCount;
@@ -170,14 +192,26 @@ public class Reviewer extends AbstractFlashcardViewer {
         }
 
         mColorPalette = findViewById(R.id.whiteboard_editor);
+        mAnswerTimer = new AnswerTimer(findViewById(R.id.card_time));
 
         startLoadingCollection();
     }
 
 
     @Override
+    protected void onPause() {
+        mAnswerTimer.pause();
+        super.onPause();
+    }
+
+    @Override
+    protected void onResume() {
+        mAnswerTimer.resume();
+        super.onResume();
+    }
+
     protected int getFlagToDisplay() {
-        int actualValue = super.getFlagToDisplay();
+        int actualValue = mCurrentCard.userFlag();
         if (actualValue == FLAG_NONE) {
             return FLAG_NONE;
         }
@@ -215,6 +249,56 @@ public class Reviewer extends AbstractFlashcardViewer {
         //Otherwise, if it's in the action bar, don't show it again.
         return isShownInActionBar == null || !isShownInActionBar;
     }
+
+    protected void onMark(Card card) {
+        if (card == null) {
+            return;
+        }
+        NoteService.toggleMark(card.note());
+        refreshActionBar();
+        onMarkChanged();
+    }
+
+
+    private void onMarkChanged() {
+        if (mCurrentCard == null) {
+            return;
+        }
+
+        mCardMarker.displayMark(shouldDisplayMark());
+    }
+
+
+    protected void onFlag(Card card, int flag) {
+        if (card == null) {
+            return;
+        }
+        card.setUserFlag(flag);
+        card.flush();
+        refreshActionBar();
+        /* Following code would allow to update value of {{cardFlag}}.
+           Anki does not update this value when a flag is changed, so
+           currently this code would do something that anki itself
+           does not do. I hope in the future Anki will correct that
+           and this code may becomes useful.
+
+        card._getQA(true); //force reload. Useful iff {{cardFlag}} occurs in the template
+        if (sDisplayAnswer) {
+            displayCardAnswer();
+        } else {
+            displayCardQuestion();
+            } */
+        onFlagChanged();
+    }
+
+
+    private void onFlagChanged() {
+        if (mCurrentCard == null) {
+            return;
+        }
+        mCardMarker.displayFlag(getFlagToDisplay());
+    }
+
 
     private void selectDeckFromExtra() {
         Bundle extras = getIntent().getExtras();
@@ -464,6 +548,52 @@ public class Reviewer extends AbstractFlashcardViewer {
     }
 
 
+    @Override
+    protected void updateForNewCard() {
+        super.updateForNewCard();
+        if (mPrefWhiteboard && mWhiteboard != null) {
+            mWhiteboard.clear();
+        }
+    }
+
+
+    @Override
+    protected void unblockControls() {
+        if (mPrefWhiteboard && mWhiteboard != null) {
+            mWhiteboard.setEnabled(true);
+        }
+
+        super.unblockControls();
+    }
+
+
+    @Override
+    protected void blockControls(boolean quick) {
+        if (mPrefWhiteboard && mWhiteboard != null) {
+            mWhiteboard.setEnabled(false);
+        }
+        super.blockControls(quick);
+    }
+
+
+    @Override
+    protected void closeReviewer(int result, boolean saveDeck) {
+        // Stop the mic recording if still pending
+        if (mMicToolBar != null) {
+            mMicToolBar.notifyStopRecord();
+        }
+        // Remove the temporary audio file
+        if (mTempAudioPath != null) {
+            File tempAudioPathToDelete = new File(mTempAudioPath);
+            if (tempAudioPathToDelete.exists()) {
+                tempAudioPathToDelete.delete();
+            }
+        }
+
+        super.closeReviewer(result, saveDeck);
+    }
+
+
     /**
      *
      * @return Whether the mic toolbar is usable
@@ -561,9 +691,8 @@ public class Reviewer extends AbstractFlashcardViewer {
     }
 
     @Override
-    @SuppressWarnings("deprecation") //  #7111: new Handler()
     public boolean onMenuOpened(int featureId, Menu menu) {
-        new Handler().post(() -> {
+        HandlerUtils.postOnNewHandler(() -> {
             for (int i = 0; i < menu.size(); i++) {
                 MenuItem menuItem = menu.getItem(i);
                 shouldUseDefaultColor(menuItem);
@@ -586,9 +715,8 @@ public class Reviewer extends AbstractFlashcardViewer {
 
 
     @Override
-    @SuppressWarnings("deprecation") //  #7111: new Handler()
     public void onPanelClosed(int featureId, @NonNull Menu menu) {
-        new Handler().postDelayed(this::refreshActionBar, 100);
+        HandlerUtils.postDelayedOnNewHandler(this::refreshActionBar, 100);
     }
 
     @Override
@@ -602,7 +730,7 @@ public class Reviewer extends AbstractFlashcardViewer {
         mActionButtons.setCustomButtonsStatus(menu);
         int alpha = (getControlBlocked() != ReviewerUi.ControlBlock.SLOW) ? Themes.ALPHA_ICON_ENABLED_LIGHT : Themes.ALPHA_ICON_DISABLED_LIGHT ;
         MenuItem markCardIcon = menu.findItem(R.id.action_mark_card);
-        if (mCurrentCard != null && mCurrentCard.note().hasTag("marked")) {
+        if (mCurrentCard != null && NoteService.isMarked(mCurrentCard.note())) {
             markCardIcon.setTitle(R.string.menu_unmark_note).setIcon(R.drawable.ic_star_white);
         } else {
             markCardIcon.setTitle(R.string.menu_mark_note).setIcon(R.drawable.ic_star_border_white);
@@ -718,7 +846,7 @@ public class Reviewer extends AbstractFlashcardViewer {
         if (colIsOpen() && getCol().getDecks().isDyn(getParentDid())) {
             menu.findItem(R.id.action_open_deck_options).setVisible(false);
         }
-        if (mSpeakText && !mActionButtons.getStatus().selectTtsIsDisabled()) {
+        if (mTTS.isEnabled() && !mActionButtons.getStatus().selectTtsIsDisabled()) {
             menu.findItem(R.id.action_select_tts).setVisible(true);
         }
         // Setup bury / suspend providers
@@ -903,63 +1031,43 @@ public class Reviewer extends AbstractFlashcardViewer {
         // (which libanki expects ease to be 2 and 3) can either be hard, good, or easy - depending on num buttons shown
         final int[] background = AnswerButtons.getBackgroundColors(this);
         final int[] textColor = AnswerButtons.getTextColors(this);
-        mEase1Layout.setVisibility(View.VISIBLE);
-        mEase1Layout.setBackgroundResource(background[0]);
-        mEase4Layout.setBackgroundResource(background[3]);
+        mEaseButton1.setVisibility(View.VISIBLE);
+        mEaseButton1.setColor(background[0]);
+        mEaseButton4.setColor(background[3]);
         switch (buttonCount) {
             case 2:
                 // Ease 2 is "good"
-                mEase2Layout.setVisibility(View.VISIBLE);
-                mEase2Layout.setBackgroundResource(background[2]);
-                mEase2.setText(R.string.ease_button_good);
-                mEase2.setTextColor(textColor[2]);
-                mNext2.setTextColor(textColor[2]);
-                mEase2Layout.requestFocus();
+                mEaseButton2.setup(background[2], textColor[2], R.string.ease_button_good);
+                mEaseButton2.requestFocus();
                 break;
             case 3:
                 // Ease 2 is good
-                mEase2Layout.setVisibility(View.VISIBLE);
-                mEase2Layout.setBackgroundResource(background[2]);
-                mEase2.setText(R.string.ease_button_good);
-                mEase2.setTextColor(textColor[2]);
-                mNext2.setTextColor(textColor[2]);
+                mEaseButton2.setup(background[2], textColor[2], R.string.ease_button_good);
                 // Ease 3 is easy
-                mEase3Layout.setVisibility(View.VISIBLE);
-                mEase3Layout.setBackgroundResource(background[3]);
-                mEase3.setText(R.string.ease_button_easy);
-                mEase3.setTextColor(textColor[3]);
-                mNext3.setTextColor(textColor[3]);
-                mEase2Layout.requestFocus();
+                mEaseButton3.setup(background[3], textColor[3], R.string.ease_button_easy);
+                mEaseButton2.requestFocus();
                 break;
             default:
-                mEase2Layout.setVisibility(View.VISIBLE);
                 // Ease 2 is "hard"
-                mEase2Layout.setVisibility(View.VISIBLE);
-                mEase2Layout.setBackgroundResource(background[1]);
-                mEase2.setText(R.string.ease_button_hard);
-                mEase2.setTextColor(textColor[1]);
-                mNext2.setTextColor(textColor[1]);
-                mEase2Layout.requestFocus();
+                mEaseButton2.setup(background[1], textColor[1], R.string.ease_button_hard);
+                mEaseButton2.requestFocus();
                 // Ease 3 is good
-                mEase3Layout.setVisibility(View.VISIBLE);
-                mEase3Layout.setBackgroundResource(background[2]);
-                mEase3.setText(R.string.ease_button_good);
-                mEase3.setTextColor(textColor[2]);
-                mNext3.setTextColor(textColor[2]);
-                mEase4Layout.setVisibility(View.VISIBLE);
-                mEase3Layout.requestFocus();
+                mEaseButton3.setup(background[2], textColor[2], R.string.ease_button_good);
+
+                mEaseButton4.setVisibility(View.VISIBLE);
+                mEaseButton3.requestFocus();
                 break;
         }
 
         // Show next review time
         if (shouldShowNextReviewTime()) {
-            mNext1.setText(mSched.nextIvlStr(this, mCurrentCard, Consts.BUTTON_ONE));
-            mNext2.setText(mSched.nextIvlStr(this, mCurrentCard, Consts.BUTTON_TWO));
+            mEaseButton1.setNextTime(mSched.nextIvlStr(this, mCurrentCard, Consts.BUTTON_ONE));
+            mEaseButton2.setNextTime(mSched.nextIvlStr(this, mCurrentCard, Consts.BUTTON_TWO));
             if (buttonCount > 2) {
-                mNext3.setText(mSched.nextIvlStr(this, mCurrentCard, Consts.BUTTON_THREE));
+                mEaseButton3.setNextTime(mSched.nextIvlStr(this, mCurrentCard, Consts.BUTTON_THREE));
             }
             if (buttonCount > 3) {
-                mNext4.setText(mSched.nextIvlStr(this, mCurrentCard, Consts.BUTTON_FOUR));
+                mEaseButton4.setNextTime(mSched.nextIvlStr(this, mCurrentCard, Consts.BUTTON_FOUR));
             }
         }
     }
@@ -972,7 +1080,7 @@ public class Reviewer extends AbstractFlashcardViewer {
     @Override
     public void automaticShowQuestion(@NonNull AutomaticAnswerAction action) {
         // explicitly do not call super
-        if (mEase1Layout.isEnabled() && mEase1Layout.getVisibility() == View.VISIBLE) {
+        if (mEaseButton1.canPerformClick()) {
             action.execute(this);
         }
     }
@@ -1042,13 +1150,15 @@ public class Reviewer extends AbstractFlashcardViewer {
         if (!sDisplayAnswer && mShowWhiteboard && mWhiteboard != null) {
             mWhiteboard.clear();
         }
+        onFlagChanged();
+        onMarkChanged();
     }
 
 
     @Override
     public void displayCardQuestion() {
         // show timer, if activated in the deck's preferences
-        initTimer();
+        mAnswerTimer.setupForCard(mCurrentCard);
         delayedHide(100);
         super.displayCardQuestion();
     }
@@ -1072,11 +1182,17 @@ public class Reviewer extends AbstractFlashcardViewer {
             mTextBarLearn.setVisibility(View.GONE);
             mTextBarReview.setVisibility(View.GONE);
         }
+
+        // can't move this into onCreate due to mTopBarLayout
+        ImageView mark = mTopBarLayout.findViewById(R.id.mark_icon);
+        ImageView flag = mTopBarLayout.findViewById(R.id.flag_icon);
+        mCardMarker = new CardMarker(mark, flag);
     }
 
     @Override
     protected void switchTopBarVisibility(int visible) {
         super.switchTopBarVisibility(visible);
+        mAnswerTimer.setVisibility(visible);
         if (mShowRemainingCardCount) {
             mTextBarNew.setVisibility(visible);
             mTextBarLearn.setVisibility(visible);
@@ -1108,6 +1224,62 @@ public class Reviewer extends AbstractFlashcardViewer {
         }
     }
 
+
+    @Override
+    public boolean executeCommand(@NonNull ViewerCommand which) {
+        //noinspection ConstantConditions
+        if (which == null) {
+            Timber.w("command should not be null");
+            which = COMMAND_NOTHING;
+        }
+        if (isControlBlocked() && which != COMMAND_EXIT) {
+            return false;
+        }
+
+        switch (which) {
+            case COMMAND_TOGGLE_FLAG_RED:
+                toggleFlag(FLAG_RED);
+                return true;
+            case COMMAND_TOGGLE_FLAG_ORANGE:
+                toggleFlag(FLAG_ORANGE);
+                return true;
+            case COMMAND_TOGGLE_FLAG_GREEN:
+                toggleFlag(FLAG_GREEN);
+                return true;
+            case COMMAND_TOGGLE_FLAG_BLUE:
+                toggleFlag(FLAG_BLUE);
+                return true;
+            case COMMAND_TOGGLE_FLAG_PINK:
+                toggleFlag(FLAG_PINK);
+                return true;
+            case COMMAND_TOGGLE_FLAG_TURQUOISE:
+                toggleFlag(FLAG_TURQUOISE);
+                return true;
+            case COMMAND_TOGGLE_FLAG_PURPLE:
+                toggleFlag(FLAG_PURPLE);
+                return true;
+            case COMMAND_UNSET_FLAG:
+                onFlag(mCurrentCard, FLAG_NONE);
+                return true;
+            case COMMAND_MARK:
+                onMark(mCurrentCard);
+                return true;
+        }
+
+        return super.executeCommand(which);
+    }
+
+
+    private void toggleFlag(@FlagDef int flag) {
+        if (mCurrentCard.userFlag() == flag) {
+            Timber.i("Toggle flag: unsetting flag");
+            onFlag(mCurrentCard, FLAG_NONE);
+        } else {
+            Timber.i("Toggle flag: Setting flag to %d", flag);
+            onFlag(mCurrentCard, flag);
+        }
+    }
+
     protected void restoreCollectionPreferences(Collection col) {
         super.restoreCollectionPreferences(col);
         mShowRemainingCardCount = col.get_config_boolean("dueCounts");
@@ -1129,10 +1301,23 @@ public class Reviewer extends AbstractFlashcardViewer {
         }
     }
 
-    @SuppressWarnings("deprecation") //  #7111: new Handler()
-    protected final Handler mFullScreenHandler = new Handler() {
+
+    @Override
+    protected void onCardEdited(Card card) {
+        super.onCardEdited(card);
+        if (mPrefWhiteboard && mWhiteboard != null) {
+            mWhiteboard.clear();
+        }
+        if (!sDisplayAnswer) {
+            // Editing the card may reuse mCurrentCard. If so, the scheduler won't call startTimer() to reset the timer
+            // QUESTIONABLE(legacy code): Only perform this if editing the question
+            card.startTimer();
+        }
+    }
+
+    protected final Handler mFullScreenHandler = new Handler(HandlerUtils.getDefaultLooper()) {
         @Override
-        public void handleMessage(Message msg) {
+        public void handleMessage(@NonNull Message msg) {
             if (mPrefFullscreenReview) {
                 setFullScreen(Reviewer.this);
             }
@@ -1478,11 +1663,16 @@ public class Reviewer extends AbstractFlashcardViewer {
         boolean hasSubMenu();
     }
 
-    public ReviewerJavaScriptFunction javaScriptFunction() {
-        return new ReviewerJavaScriptFunction();
+    @Override
+    public AnkiDroidJsAPI javaScriptFunction() {
+        return new ReviewerJavaScriptFunction(this);
     }
 
-    public class ReviewerJavaScriptFunction extends JavaScriptFunction {
+    public class ReviewerJavaScriptFunction extends AnkiDroidJsAPI {
+        public ReviewerJavaScriptFunction(@NonNull AbstractFlashcardViewer activity) {
+            super(activity);
+        }
+
         @JavascriptInterface
         @Override
         public String ankiGetNewCardCount() {
@@ -1506,5 +1696,30 @@ public class Reviewer extends AbstractFlashcardViewer {
         public int ankiGetETA() {
             return mEta;
         }
+
+        @JavascriptInterface
+        @Override
+        public String ankiGetNextTime1() {
+            return mEaseButton1.getNextTime();
+        }
+
+        @JavascriptInterface
+        @Override
+        public String ankiGetNextTime2() {
+            return mEaseButton2.getNextTime();
+        }
+
+        @JavascriptInterface
+        @Override
+        public String ankiGetNextTime3() {
+            return mEaseButton3.getNextTime();
+        }
+
+        @JavascriptInterface
+        @Override
+        public String ankiGetNextTime4() {
+            return mEaseButton4.getNextTime();
+        }
+
     }
 }

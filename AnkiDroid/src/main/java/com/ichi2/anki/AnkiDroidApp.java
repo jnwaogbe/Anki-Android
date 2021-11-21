@@ -151,6 +151,9 @@ import static timber.log.Timber.DebugTree;
 )
 public class AnkiDroidApp extends Application {
 
+    /** Running under instrumentation. a "/androidTest" folder will be created which contains a test collection */
+    public static boolean INSTRUMENTATION_TESTING = false;
+
     /**
      * Toggles Scoped Storage functionality introduced in later commits <p>
      * Can be set to true or false only by altering the declaration itself.
@@ -160,7 +163,17 @@ public class AnkiDroidApp extends Application {
      * Should be set to true for testing Scoped Storage <p>
      * TODO: Should be removed once app is fully functional under Scoped Storage
      */
-    public static final boolean TESTING_SCOPED_STORAGE = false;
+    public static boolean TESTING_SCOPED_STORAGE = false;
+
+    /**
+     * Toggles opening the collection using schema 16 via the Rust backend
+     * and using the V16 versions of the major 'col' classes: models, decks, dconf, conf, tags
+     *
+     * UNSTABLE: DO NOT USE THIS ON A COLLECTION YOU CARE ABOUT.
+     *
+     * Set this and {@link com.ichi2.libanki.Consts#SCHEMA_VERSION} to 16.
+     */
+    public static boolean TESTING_USE_V16_BACKEND = false;
 
     private static final String WEBVIEW_VER_NAME = "WEBVIEW_VER_NAME";
 

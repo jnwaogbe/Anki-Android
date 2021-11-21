@@ -141,6 +141,7 @@
     <string name="card_editor_reset_card">Vynulovať pokrok</string>
     <string name="card_editor_reschedule_card" comment="Action to reschedule a card">Preplánovať</string>
     <string name="card_editor_preview_card" comment="Button offering to preview some card(s)">Náhľad</string>
+    <string name="preview_progress_bar_text" comment="What card we are on out of how many in card previewer progress bar">%1$d of %2$d</string>
     <string name="error_insufficient_memory">Operáciu nie je možné vykonať pre nedostatok pamäte vo vašom prístroji</string>
     <string name="rename" comment="Confirm that the renaming action should be processed.">Premenovať</string>
     <string name="default_conf_delete_error">Predvolenú skupinu nastavení nie je možné odstrániť</string>
@@ -365,6 +366,7 @@
     <string name="create_shortcut_failed" comment="home screen == launcher">Vaša domovská obrazovka neumožňuje, aby AnkiDroid pridal zástupcov</string>
     <string name="create_shortcut_error">Chyba pri pridávaní odkazu: %s</string>
     <string name="note_editor_capitalize" comment="This is for a switch with a checkbox - on: enabled">Písať vety s veľkým začiatočným písmenom</string>
+    <string name="menu_scroll_toolbar" comment="Checkbox stating whether note editor toolbar is scrollable or stacked. Checked: Scroll">Scroll toolbar</string>
     <!-- Symbols used as Button text in IncrementNumberRangePreference -->
     <string name="plus_sign" comment="Label for increment button in IncrementerNumberRangePreference">+</string>
     <string name="minus_sign" comment="Label for decrement button in IncrementerNumberRangePreference">-</string>
@@ -391,5 +393,12 @@
     <string name="import_mapped_to_field">Namapované na  %s</string>
     <string name="import_mapped_to_tags">Namapované na Štítky</string>
     <string name="import_mapped_to_nothing">Odignorované</string>
-    <string name="buried_card">Buried card</string>
+    <!-- Reviewer actions -->
+    <string name="buried_card">Kartička zahrabaná.</string>
+    <string name="buried_note">Poznámka zahrabaná.</string>
+    <string name="deleted_note">Poznámka vymazaná.</string>
+    <string name="suspended_card">Kartička pozastavená.</string>
+    <string name="suspended_note">Poznámka pozastavená.</string>
+    <!--  Note Editor Toggle Sticky  -->
+    <string name="note_editor_toggle_sticky">Make field %s sticky</string>
 </resources>

@@ -19,13 +19,16 @@ package com.ichi2.anki;
 import android.os.Bundle;
 import android.view.View;
 
+import com.ichi2.anki.cardviewer.PreviewLayout;
 import com.ichi2.libanki.Card;
 import com.ichi2.libanki.Collection;
 import com.ichi2.libanki.Model;
 import com.ichi2.libanki.Note;
+import com.ichi2.libanki.TemplateManager;
 import com.ichi2.libanki.utils.NoteUtils;
-import com.ichi2.themes.Themes;
 import com.ichi2.utils.JSONObject;
+
+import net.ankiweb.rsdroid.RustCleanup;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -66,6 +69,8 @@ public class CardTemplatePreviewer extends AbstractFlashcardViewer {
     private int mTemplateCount;
     private int mTemplateIndex = 0;
 
+    protected PreviewLayout mPreviewLayout;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         if (showedActivityFailedScreen(savedInstanceState)) {
@@ -93,15 +98,6 @@ public class CardTemplatePreviewer extends AbstractFlashcardViewer {
                 mEditedModel = TemporaryModel.getTempModel(mEditedModelFileName);
             } catch (IOException e) {
                 Timber.w(e, "Unable to load temp model from file %s", mEditedModelFileName);
-                closeCardTemplatePreviewer();
-            }
-        }
-
-        if (mEditedModel != null && mOrdinal != -1) {
-            Timber.d("onCreate() CardTemplatePreviewer started with edited model and template index, displaying blank to preview formatting");
-            mCurrentCard = getDummyCard(mEditedModel, mOrdinal);
-            if (mCurrentCard == null) {
-                UIUtils.showThemedToast(getApplicationContext(), getString(R.string.invalid_template), false);
                 closeCardTemplatePreviewer();
             }
         }
@@ -164,23 +160,12 @@ public class CardTemplatePreviewer extends AbstractFlashcardViewer {
         mTopBarLayout.setVisibility(View.GONE);
 
         findViewById(R.id.answer_options_layout).setVisibility(View.GONE);
-        mPreviewButtonsLayout.setVisibility(View.VISIBLE);
 
-        mPreviewButtonsLayout.setOnClickListener(mToggleAnswerHandler);
-
-        mPreviewPrevCard.setVisibility(View.GONE);
-        mPreviewNextCard.setVisibility(View.GONE);
-        mPreviewPrevCard.setOnClickListener((view) -> onPreviousTemplate());
-        mPreviewNextCard.setOnClickListener((view) -> onNextTemplate());
-        mPreviewPrevCard.setEnabled(false);
-        mPreviewPrevCard.setAlpha(0.38F);
-
-        if (animationEnabled()) {
-            int resId = Themes.getResFromAttr(this, R.attr.hardButtonRippleRef);
-            mPreviewButtonsLayout.setBackgroundResource(resId);
-            mPreviewPrevCard.setBackgroundResource(resId);
-            mPreviewNextCard.setBackgroundResource(resId);
-        }
+        mPreviewLayout = PreviewLayout.createAndDisplay(this, mToggleAnswerHandler);
+        mPreviewLayout.setOnPreviousCard((view) -> onPreviousTemplate());
+        mPreviewLayout.setOnNextCard((view) -> onNextTemplate());
+        mPreviewLayout.hideNavigationButtons();
+        mPreviewLayout.setPrevButtonEnabled(false);
     }
 
 
@@ -188,7 +173,7 @@ public class CardTemplatePreviewer extends AbstractFlashcardViewer {
     public void displayCardQuestion() {
         super.displayCardQuestion();
         mShowingAnswer = false;
-        updateButtonsState();
+        mPreviewLayout.setShowingAnswer(false);
     }
 
 
@@ -196,7 +181,7 @@ public class CardTemplatePreviewer extends AbstractFlashcardViewer {
     protected void displayCardAnswer() {
         super.displayCardAnswer();
         mShowingAnswer = true;
-        updateButtonsState();
+        mPreviewLayout.setShowingAnswer(true);
     }
 
 
@@ -250,11 +235,8 @@ public class CardTemplatePreviewer extends AbstractFlashcardViewer {
         boolean prevBtnEnabled = isPrevBtnEnabled(mTemplateIndex);
         boolean nextBtnEnabled = isNextBtnEnabled(mTemplateIndex);
 
-        mPreviewPrevCard.setEnabled(prevBtnEnabled);
-        mPreviewNextCard.setEnabled(nextBtnEnabled);
-
-        mPreviewPrevCard.setAlpha(prevBtnEnabled ? 1 : 0.38F);
-        mPreviewNextCard.setAlpha(nextBtnEnabled ? 1 : 0.38F);
+        mPreviewLayout.setPrevButtonEnabled(prevBtnEnabled);
+        mPreviewLayout.setNextButtonEnabled(nextBtnEnabled);
 
         setCurrentCardFromNoteEditorBundle(getCol());
         displayCardQuestion();
@@ -268,11 +250,6 @@ public class CardTemplatePreviewer extends AbstractFlashcardViewer {
 
     public boolean isNextBtnEnabled(int newTemplateIndex) {
         return newTemplateIndex < mTemplateCount -1;
-    }
-
-
-    private void updateButtonsState() {
-        mPreviewToggleAnswerText.setText(mShowingAnswer ? R.string.hide_answer : R.string.show_answer);
     }
 
 
@@ -291,23 +268,39 @@ public class CardTemplatePreviewer extends AbstractFlashcardViewer {
     @Override
     protected void onCollectionLoaded(Collection col) {
         super.onCollectionLoaded(col);
-        if ((mCurrentCard == null) && (mCardList == null)) {
-            Timber.d("onCollectionLoaded - incorrect state to load, closing");
-            closeCardTemplatePreviewer();
-            return;
-        }
-        if (mCardList != null && mCardListIndex >= 0 && mCardListIndex < mCardList.length) {
-            mCurrentCard = new PreviewerCard(col, mCardList[mCardListIndex]);
-        }
+
+
 
         if (mNoteEditorBundle != null) {
-            Note toPreview = setCurrentCardFromNoteEditorBundle(col);
-            mTemplateCount = getCol().findTemplates(toPreview).size();
+            // loading from the note editor
+            Card toPreview = setCurrentCardFromNoteEditorBundle(col);
+            if (toPreview != null) {
+                mTemplateCount = getCol().findTemplates(toPreview.note()).size();
 
-            if (mTemplateCount >= 2) {
-                mPreviewPrevCard.setVisibility(View.VISIBLE);
-                mPreviewNextCard.setVisibility(View.VISIBLE);
+                if (mTemplateCount >= 2) {
+                    mPreviewLayout.showNavigationButtons();
+                }
             }
+        } else {
+            // loading from the card template editor
+
+            // card template with associated card due to opening from note editor
+            if (mCardList != null && mCardListIndex >= 0 && mCardListIndex < mCardList.length) {
+                setCurrentCard(new PreviewerCard(col, mCardList[mCardListIndex]));
+            } else if (mEditedModel != null) { // bare note type (not coming from note editor), or new card template
+                Timber.d("onCreate() CardTemplatePreviewer started with edited model and template index, displaying blank to preview formatting");
+                setCurrentCard(getDummyCard(mEditedModel, mOrdinal));
+                if (mCurrentCard == null) {
+                    UIUtils.showThemedToast(getApplicationContext(), getString(R.string.invalid_template), false);
+                    closeCardTemplatePreviewer();
+                }
+            }
+        }
+
+        if (mCurrentCard == null) {
+            UIUtils.showThemedToast(getApplicationContext(), getString(R.string.invalid_template), false);
+            closeCardTemplatePreviewer();
+            return;
         }
 
         displayCardQuestion();
@@ -326,9 +319,14 @@ public class CardTemplatePreviewer extends AbstractFlashcardViewer {
         return mTemplateIndex;
     }
 
-    private Note setCurrentCardFromNoteEditorBundle(Collection col) {
+    @Nullable
+    private Card setCurrentCardFromNoteEditorBundle(Collection col) {
         assert(mNoteEditorBundle != null);
-        mCurrentCard = getDummyCard(mEditedModel, mTemplateIndex, getBundleEditFields(mNoteEditorBundle));
+        setCurrentCard(getDummyCard(mEditedModel, mTemplateIndex, getBundleEditFields(mNoteEditorBundle)));
+        // example: a basic card with no fields provided
+        if (mCurrentCard == null) {
+            return null;
+        }
         long newDid = mNoteEditorBundle.getLong("did");
         if (col.getDecks().isDyn(newDid)) {
             mCurrentCard.setODid(mCurrentCard.getDid());
@@ -338,7 +336,7 @@ public class CardTemplatePreviewer extends AbstractFlashcardViewer {
         Note currentNote = mCurrentCard.note();
         ArrayList<String> tagsList = mNoteEditorBundle.getStringArrayList("tags");
         NoteUtils.setTags(currentNote, tagsList);
-        return currentNote;
+        return mCurrentCard;
     }
 
 
@@ -385,7 +383,7 @@ public class CardTemplatePreviewer extends AbstractFlashcardViewer {
             JSONObject template = getCol().findTemplates(n).get(index);
             return getCol().getNewLinkedCard(new PreviewerCard(getCol(), n), n, template, 1, 0L, false);
         } catch (Exception e) {
-            Timber.e("getDummyCard() unable to create card");
+            Timber.e(e, "getDummyCard() unable to create card");
         }
         return null;
     }
@@ -446,6 +444,17 @@ public class CardTemplatePreviewer extends AbstractFlashcardViewer {
                 return mEditedModel;
             }
             return super.model();
+        }
+
+
+        @NonNull
+        @Override
+        @RustCleanup("determine how Anki Desktop does this")
+        public TemplateManager.TemplateRenderContext.TemplateRenderOutput render_output(boolean reload, boolean browser) {
+            if (getRenderOutput() == null || reload) {
+                setRenderOutput(getCol().render_output_legacy(this, reload, browser));
+            }
+            return getRenderOutput();
         }
     }
 }

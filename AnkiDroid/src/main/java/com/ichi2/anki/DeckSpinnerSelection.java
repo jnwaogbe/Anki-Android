@@ -42,15 +42,24 @@ import java.util.List;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.VisibleForTesting;
 import androidx.appcompat.app.ActionBar;
 import androidx.core.content.ContextCompat;
-import androidx.fragment.app.Fragment;
 import timber.log.Timber;
 
 public class DeckSpinnerSelection {
 
     private long mDeckId;
+    /**
+     * All of the decks shown to the user.
+     */
     private ArrayList<Long> mAllDeckIds;
+    /**
+     * The spinner displayed in the activity.
+     * Empty at construction. After initialization, it contains in this order:
+     * * "All decks" if mShowAllDecks is true
+     * * then it contains all decks from mAllDeckIds.
+     */
     @NonNull
     private final Spinner mSpinner;
     @NonNull
@@ -60,34 +69,29 @@ public class DeckSpinnerSelection {
     private final Collection mCollection;
     private List<Deck> mDropDownDecks;
     private DeckDropDownAdapter mDeckDropDownAdapter;
-    private boolean mShowAllDecks = false;
+    private final boolean mShowAllDecks;
     private static final long ALL_DECKS_ID = 0L;
-    private boolean mAlwaysShowDefault = true;
+    /** Whether to show the default deck if it is not visible in the Deck Picker */
+    private final boolean mAlwaysShowDefault;
 
 
-    public DeckSpinnerSelection(@NonNull AnkiActivity context, @NonNull Collection collection, @NonNull Spinner spinner) {
+    /**
+     * @param spinner Currently empty Spinner. Used to access the Android view.
+     */
+    public DeckSpinnerSelection(@NonNull AnkiActivity context, @NonNull Collection collection, @NonNull Spinner spinner, boolean showAllDecks, boolean alwaysShowDefault) {
         this.mContext = context;
         this.mCollection = collection;
         this.mSpinner = spinner;
         this.mWithFragmentManager = FragmentManagerUtilsKt.toFragmentManager(context);
-    }
-
-    public DeckSpinnerSelection(@NonNull Fragment fragment, @NonNull Collection collection, @NonNull Spinner spinner) {
-        this.mContext = fragment.getContext();
-        this.mCollection = collection;
-        this.mSpinner = spinner;
-        this.mWithFragmentManager = FragmentManagerUtilsKt.toFragmentManager(fragment);
-    }
-
-    public void setShowAllDecks(boolean showAllDecks) {
-        mShowAllDecks = showAllDecks;
+        this.mShowAllDecks = showAllDecks;
+        this.mAlwaysShowDefault = alwaysShowDefault;
     }
 
     public void initializeActionBarDeckSpinner(@NonNull ActionBar actionBar) {
         actionBar.setDisplayShowTitleEnabled(false);
 
         // Add drop-down menu to select deck to action bar.
-        mDropDownDecks = getDropDownDecks(mCollection);
+        mDropDownDecks = computeDropDownDecks();
 
         mAllDeckIds = new ArrayList<>(mDropDownDecks.size());
         for (Deck d : mDropDownDecks) {
@@ -105,7 +109,7 @@ public class DeckSpinnerSelection {
 
     public void initializeNoteEditorDeckSpinner(@Nullable Card currentEditedCard, boolean addNote) {
         Collection col = mCollection;
-        mDropDownDecks = getDropDownDecks(col);
+        mDropDownDecks = computeDropDownDecks();
         final ArrayList<String> deckNames = new ArrayList<>(mDropDownDecks.size());
         mAllDeckIds = new ArrayList<>(mDropDownDecks.size());
         for (Deck d : mDropDownDecks) {
@@ -115,16 +119,22 @@ public class DeckSpinnerSelection {
             String lineContent;
             if (d.isStd()) {
                 lineContent = currentName;
-            } else if (!addNote && currentEditedCard != null && currentEditedCard.getDid() == thisDid) {
-                lineContent = mContext.getApplicationContext().getString(R.string.current_and_default_deck, currentName, col.getDecks().name(currentEditedCard.getODid()));
             } else {
-                continue;
+                // We do not allow cards to be moved to dynamic deck.
+                // That mean we do not list dynamic decks in the spinner, with one exception
+                if (!addNote && currentEditedCard != null && currentEditedCard.getDid() == thisDid) {
+                    // If the current card is in a dynamic deck, it can stay there. Hence current deck is added
+                    // to the spinner, even if it is dynamic.
+                    lineContent = mContext.getApplicationContext().getString(R.string.current_and_default_deck, currentName, col.getDecks().name(currentEditedCard.getODid()));
+                } else {
+                    continue;
+                }
             }
             mAllDeckIds.add(thisDid);
             deckNames.add(lineContent);
         }
 
-        ArrayAdapter<String> noteDeckAdapter = new ArrayAdapter<String>(mContext, android.R.layout.simple_spinner_item, deckNames) {
+        ArrayAdapter<String> noteDeckAdapter = new ArrayAdapter<String>(mContext, R.layout.multiline_spinner_item, deckNames) {
             @Override
             public View getDropDownView(int position, View convertView, ViewGroup parent) {
 
@@ -148,9 +158,12 @@ public class DeckSpinnerSelection {
     }
 
 
+    /**
+     * @return All decks, except maybe default if it should be hidden.
+     */
     @NonNull
-    protected List<Deck> getDropDownDecks(Collection col) {
-        List<Deck> decks = col.getDecks().allSorted();
+    protected List<Deck> computeDropDownDecks() {
+        List<Deck> decks = mCollection.getDecks().allSorted();
         if (shouldHideDefaultDeck()) {
             decks.removeIf(x -> x.getLong("id") == Consts.DEFAULT_DECK_ID);
         }
@@ -169,10 +182,15 @@ public class DeckSpinnerSelection {
         setSpinnerVisibility(View.VISIBLE);
     }
 
-    public void updateDeckPosition() {
-        int position = mAllDeckIds.indexOf(mDeckId);
+
+    /**
+     * Move the selected deck in the spinner to mDeckId.
+     * Timber if mDeckId is not an id of a known deck.
+     */
+    public void updateDeckPosition(long deckId) {
+        int position = mAllDeckIds.indexOf(deckId);
         if (position != -1) {
-            selectDropDownItem(position);
+            mSpinner.setSelection(position);
         } else {
             Timber.e("updateDeckPosition() error :: mCurrentDid=%d, position=%d", mDeckId, position);
         }
@@ -194,16 +212,8 @@ public class DeckSpinnerSelection {
         return mDropDownDecks;
     }
 
-    public void setDeckId(Long deckId) {
-        this.mDeckId = deckId;
-    }
-
-    public Long getDeckId() {
-        return mDeckId;
-    }
-
-    public Spinner getSpinner() {
-        return mSpinner;
+    public boolean hasSpinner() {
+        return mSpinner != null;
     }
 
     /**
@@ -213,22 +223,27 @@ public class DeckSpinnerSelection {
      * (this means the deck selected here will continue to appear in any future Activity whose
      * display data is loaded from Collection's current deck). If false, deckId will not be set as
      * the current deck id of Collection.
-     * @return True if a deck with deckId exists, false otherwise.
+     * @return True if selection succeeded.
      */
     public boolean selectDeckById(long deckId, boolean setAsCurrentDeck) {
         if (deckId == ALL_DECKS_ID) {
-            selectAllDecks();
-            return true;
+            return selectAllDecks();
         }
-        return searchInList(deckId, setAsCurrentDeck);
+        return selectDeck(deckId, setAsCurrentDeck);
     }
 
 
-    private boolean searchInList(long deckId, boolean setAsCurrentDeck) {
+    /**
+     * select in the spinner deck with id
+     * @param deckId The deck id to search (not ALL_DECKS_ID)
+     * @param setAsCurrentDeck whether this deck should be selected in the collection (if it exists)
+     * @return whether it was found
+     */
+    private boolean selectDeck(long deckId, boolean setAsCurrentDeck) {
         for (int dropDownDeckIdx = 0; dropDownDeckIdx < mAllDeckIds.size(); dropDownDeckIdx++) {
             if (mAllDeckIds.get(dropDownDeckIdx) == deckId) {
                 int position = mShowAllDecks ? dropDownDeckIdx + 1 : dropDownDeckIdx;
-                selectDropDownItem(position);
+                mSpinner.setSelection(position);
                 if (setAsCurrentDeck) {
                     mCollection.getDecks().select(deckId);
                 }
@@ -238,18 +253,20 @@ public class DeckSpinnerSelection {
         return false;
     }
 
-    void selectAllDecks() {
-        selectDropDownItem(0);
+
+    /**
+     * Select all decks. Must be called only if mShowAllDecks.
+     * @return whether selection was a success.
+     */
+    boolean selectAllDecks() {
+        if (!mShowAllDecks) {
+            AnkiDroidApp.sendExceptionReport("selectAllDecks was called while `mShowAllDecks is false`", "DeckSpinnerSelection:selectAllDecks");
+            return false;
+        }
+        mSpinner.setSelection(0);
+        return true;
     }
 
-    public void selectDropDownItem(int position) {
-        mSpinner.setSelection(position);
-        if (position == 0) {
-            mDeckId = Stats.ALL_DECKS_ID;
-        } else {
-            mDeckId = mAllDeckIds.get(position - 1);
-        }
-    }
 
     public void displayDeckOverrideDialog(Collection col) {
         FunctionalInterfaces.Filter<Deck> nonDynamic = (d) -> !Decks.isDynamic(d);
@@ -266,13 +283,10 @@ public class DeckSpinnerSelection {
     }
 
 
+    /**
+     * @return Whether default deck should appear in the list of deck
+     */
     protected boolean shouldHideDefaultDeck() {
         return !mAlwaysShowDefault && !DeckService.shouldShowDefaultDeck(mCollection);
-    }
-
-
-    /** Whether to show the default deck if it is not visible in the Deck Picker */
-    public void setAlwaysShowDefaultDeck(boolean showDefault) {
-        this.mAlwaysShowDefault = showDefault;
     }
 }

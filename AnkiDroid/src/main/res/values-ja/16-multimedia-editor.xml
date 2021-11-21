@@ -104,6 +104,7 @@
     <string name="multimedia_editor_progress_wait_title">しばらくお待ちください</string>
     <!-- not a good message, when an unexpected error happens -->
     <string name="multimedia_editor_something_wrong">予期しないエラーが発生しました</string>
+    <string name="multimedia_editor_svg_preview">SVGs are not available for preview</string>
     <string name="multimedia_editor_png_paste_error">Error converting clipboard image to png: %s</string>
     <string name="multimedia_editor_attach_mm_content" comment="used for screen readers. Not visible to the user">ﾌｨｰﾙﾄﾞ「%1$s」にﾏﾙﾁﾒﾃﾞｨｱｺﾝﾃﾝﾂを添付</string>
     <string name="multimedia_editor_attach_media">メディアを貼付け</string>
@@ -123,4 +124,5 @@
     <string name="save_dialog_content">現在の画像サイズは %sMB です。画像サイズ制限は 1MB です。トリミングしますか？</string>
     <string name="select_image_failed">"画像の選択に失敗しました。再試行してください。"</string>
     <string name="activity_result_unexpected">予期しないエラーが発生しました。別のアプリを使用する必要があるかもしれません。</string>
+    <string name="audio_recording_field_list" comment="Displays a list of the field data in the note editor while audio recording is taking place">Field Contents</string>
 </resources>

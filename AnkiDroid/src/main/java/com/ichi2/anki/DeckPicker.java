@@ -461,8 +461,9 @@ public class DeckPicker extends NavigationDrawerActivity implements
         dividerDecorator.setDrawable(divider);
         mRecyclerView.addItemDecoration(dividerDecorator);
 
-        //Add background to Deckpicker activity
-        View view = mFragmented ? findViewById(R.id.deckpicker_view) : findViewById(R.id.root_layout);
+        // Add background to Deckpicker activity
+        View view = mFragmented ? findViewById(R.id.deckpicker_xl_view) : findViewById(R.id.root_layout);
+
         boolean hasDeckPickerBackground = false;
         try {
             hasDeckPickerBackground = applyDeckPickerBackground(view);
@@ -1326,7 +1327,7 @@ public class DeckPicker extends NavigationDrawerActivity implements
 
 
     @Override
-    public void showMediaCheckDialog(int id, List<List<String>> checkList) {
+    public void showMediaCheckDialog(int id, List<? extends List<String>> checkList) {
         showAsyncDialogFragment(MediaCheckDialog.newInstance(id, checkList));
     }
 
@@ -1390,6 +1391,9 @@ public class DeckPicker extends NavigationDrawerActivity implements
 
     public void showImportDialog(int id, String message) {
         Timber.d("showImportDialog() delegating to ImportDialog");
+        if (message == null) {
+            message = "";
+        }
         AsyncDialogFragment newFragment = ImportDialog.newInstance(id, message);
         showAsyncDialogFragment(newFragment);
     }

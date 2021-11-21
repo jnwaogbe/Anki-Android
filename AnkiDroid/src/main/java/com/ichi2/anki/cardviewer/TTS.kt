@@ -24,11 +24,14 @@ import com.ichi2.anki.R
 import com.ichi2.anki.ReadText
 import com.ichi2.libanki.Card
 import com.ichi2.libanki.Sound.SoundSide
+import com.ichi2.libanki.TTSTag
 import com.ichi2.libanki.Utils
 import com.ichi2.libanki.template.TemplateFilters
-import timber.log.Timber
 
 class TTS {
+    @get:JvmName("isEnabled")
+    var enabled: Boolean = false
+
     private val mTTS: ReadText? = null
 
     /**
@@ -55,18 +58,8 @@ class TTS {
      * @param card     The card to play TTS for
      * @param cardSide The side of the current card to play TTS for
      */
-    fun readCardText(context: Context, card: Card, cardSide: SoundSide) {
-        val cardSideContent: String
-        cardSideContent = if (SoundSide.QUESTION == cardSide) {
-            card.q(true)
-        } else if (SoundSide.ANSWER == cardSide) {
-            card.pureAnswer
-        } else {
-            Timber.w("Unrecognised cardSide")
-            return
-        }
-        val clozeReplacement = context.getString(R.string.reviewer_tts_cloze_spoken_replacement)
-        ReadText.readCardSide(cardSide, cardSideContent, CardUtils.getDeckIdForCard(card), getOrdUsingCardType(card), clozeReplacement)
+    fun readCardText(ttsTags: List<TTSTag>, card: Card, cardSide: SoundSide) {
+        ReadText.readCardSide(ttsTags, cardSide, CardUtils.getDeckIdForCard(card), getOrdUsingCardType(card))
     }
 
     /**
@@ -85,5 +78,25 @@ class TTS {
         val clozeReplacement = context.getString(R.string.reviewer_tts_cloze_spoken_replacement)
         val clozeReplaced = text.replace(TemplateFilters.CLOZE_DELETION_REPLACEMENT, clozeReplacement)
         return Utils.stripHTML(clozeReplaced)
+    }
+
+    fun initialize(ctx: Context, listener: ReadText.ReadTextListener) {
+        if (!enabled) {
+            return
+        }
+        ReadText.initializeTts(ctx, listener)
+    }
+
+    /**
+     * Request that TextToSpeech is stopped and shutdown after it it no longer being used
+     * by the context that initialized it.
+     * No-op if the current instance of TextToSpeech was initialized by another Context
+     * @param context The context used during {@link #initializeTts(Context, ReadTextListener)}
+     */
+    fun releaseTts(context: Context) {
+        if (!enabled) {
+            return
+        }
+        ReadText.releaseTts(context)
     }
 }

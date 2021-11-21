@@ -24,11 +24,14 @@ import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.widget.LinearLayout;
+import android.widget.SeekBar;
+import android.widget.TextView;
 
+import com.ichi2.anki.cardviewer.PreviewLayout;
 import com.ichi2.anki.cardviewer.ViewerCommand;
 import com.ichi2.libanki.Collection;
 import com.ichi2.libanki.Utils;
-import com.ichi2.themes.Themes;
 
 import java.util.HashSet;
 import java.util.List;
@@ -46,11 +49,14 @@ public class Previewer extends AbstractFlashcardViewer {
     private long[] mCardList;
     private int mIndex;
     private boolean mShowingAnswer;
+    private SeekBar mProgressSeekBar;
+    private TextView mProgressText;
 
     /** Communication with Browser */
     private boolean mReloadRequired;
     private boolean mNoteChanged;
 
+    protected PreviewLayout mPreviewLayout;
 
     @CheckResult
     @NonNull
@@ -73,7 +79,7 @@ public class Previewer extends AbstractFlashcardViewer {
         mCardList = getIntent().getLongArrayExtra("cardList");
         mIndex = getIntent().getIntExtra("index", -1);
 
-        if (savedInstanceState != null){
+        if (savedInstanceState != null) {
             mIndex = savedInstanceState.getInt("index", mIndex);
             mShowingAnswer = savedInstanceState.getBoolean("showingAnswer", mShowingAnswer);
             mReloadRequired = savedInstanceState.getBoolean("reloadRequired");
@@ -89,12 +95,55 @@ public class Previewer extends AbstractFlashcardViewer {
         // Ensure navigation drawer can't be opened. Various actions in the drawer cause crashes.
         disableDrawerSwipe();
         startLoadingCollection();
+        initPreviewProgress();
+    }
+
+    private void initPreviewProgress() {
+        mProgressSeekBar = findViewById(R.id.preview_progress_seek_bar);
+        mProgressText = findViewById(R.id.preview_progress_text);
+        LinearLayout progressLayout = findViewById(R.id.preview_progress_layout);
+
+        //Show layout only when the cardList is bigger than 1
+        if (mCardList.length > 1) {
+            progressLayout.setVisibility(View.VISIBLE);
+            mProgressSeekBar.setMax(mCardList.length - 1);
+            setSeekBarListener();
+            updateProgress();
+        }
+    }
+
+    private void setSeekBarListener() {
+        mProgressSeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                if (fromUser) {
+                    mIndex = progress;
+                    updateProgress();
+                    setCurrentCard(getCol().getCard(mCardList[mIndex]));
+                    displayCardQuestion();
+
+                }
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+                // Mandatory override, but unused
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                if (mIndex >= 0 && mIndex < mCardList.length) {
+                    setCurrentCard(getCol().getCard(mCardList[mIndex]));
+                    displayCardQuestion();
+                }
+            }
+        });
     }
 
     @Override
     protected void onCollectionLoaded(Collection col) {
         super.onCollectionLoaded(col);
-        mCurrentCard = col.getCard(mCardList[mIndex]);
+        setCurrentCard(col.getCard(mCardList[mIndex]));
 
         displayCardQuestion();
         if (mShowingAnswer) {
@@ -139,18 +188,9 @@ public class Previewer extends AbstractFlashcardViewer {
 
         findViewById(R.id.answer_options_layout).setVisibility(View.GONE);
 
-        mPreviewButtonsLayout.setVisibility(View.VISIBLE);
-        mPreviewButtonsLayout.setOnClickListener(mToggleAnswerHandler);
-
-        mPreviewPrevCard.setOnClickListener(mSelectScrollHandler);
-        mPreviewNextCard.setOnClickListener(mSelectScrollHandler);
-
-        if (animationEnabled()) {
-            int resId = Themes.getResFromAttr(this, R.attr.hardButtonRippleRef);
-            mPreviewButtonsLayout.setBackgroundResource(resId);
-            mPreviewPrevCard.setBackgroundResource(R.drawable.item_background_light_selectable_borderless);
-            mPreviewNextCard.setBackgroundResource(R.drawable.item_background_light_selectable_borderless);
-        }
+        mPreviewLayout = PreviewLayout.createAndDisplay(this, mToggleAnswerHandler);
+        mPreviewLayout.setOnNextCard((view) -> changePreviewedCard(true));
+        mPreviewLayout.setOnPreviousCard((view) -> changePreviewedCard(false));
     }
 
 
@@ -242,7 +282,7 @@ public class Previewer extends AbstractFlashcardViewer {
 
         mIndex = getNextIndex(newCardList);
         mCardList = Utils.collection2Array(newCardList);
-        mCurrentCard = getCol().getCard(mCardList[mIndex]);
+        setCurrentCard(getCol().getCard(mCardList[mIndex]));
         displayCardQuestion();
     }
 
@@ -254,19 +294,13 @@ public class Previewer extends AbstractFlashcardViewer {
     }
 
 
-    private final View.OnClickListener mSelectScrollHandler = new View.OnClickListener() {
-        @Override
-        public void onClick(View view) {
-            if (view.getId() == R.id.preview_previous_flashcard) {
-                mIndex--;
-            } else if (view.getId() == R.id.preview_next_flashcard) {
-                mIndex++;
-            }
+    protected void changePreviewedCard(boolean nextCard) {
+        mIndex = nextCard ? mIndex + 1 : mIndex - 1;
+        setCurrentCard(getCol().getCard(mCardList[mIndex]));
+        displayCardQuestion();
+        updateProgress();
+    }
 
-            mCurrentCard = getCol().getCard(mCardList[mIndex]);
-            displayCardQuestion();
-        }
-    };
 
     private final View.OnClickListener mToggleAnswerHandler = new View.OnClickListener() {
         @Override
@@ -280,24 +314,26 @@ public class Previewer extends AbstractFlashcardViewer {
     };
 
     private void updateButtonsState() {
-        mPreviewToggleAnswerText.setText(mShowingAnswer ? R.string.hide_answer : R.string.show_answer);
+        mPreviewLayout.setShowingAnswer(mShowingAnswer);
 
         // If we are in single-card mode, we show the "Show Answer" button on the question side
         // and hide navigation buttons.
         if (mCardList.length == 1) {
-            mPreviewPrevCard.setVisibility(View.GONE);
-            mPreviewNextCard.setVisibility(View.GONE);
+            mPreviewLayout.hideNavigationButtons();
             return;
         }
 
-        boolean prevBtnDisabled = mIndex <= 0;
-        boolean nextBtnDisabled = mIndex >= mCardList.length - 1;
+        mPreviewLayout.setPrevButtonEnabled(mIndex > 0);
+        mPreviewLayout.setNextButtonEnabled(mIndex < mCardList.length - 1);
+    }
 
-        mPreviewPrevCard.setEnabled(!prevBtnDisabled);
-        mPreviewNextCard.setEnabled(!nextBtnDisabled);
+    private void updateProgress() {
+        if (mProgressSeekBar.getProgress() != mIndex) {
+            mProgressSeekBar.setProgress(mIndex);
+        }
 
-        mPreviewPrevCard.setAlpha(prevBtnDisabled ? 0.38F : 1);
-        mPreviewNextCard.setAlpha(nextBtnDisabled ? 0.38F : 1);
+        String progress = getString(R.string.preview_progress_bar_text, mIndex + 1, mCardList.length);
+        mProgressText.setText(progress);
     }
 
     @NonNull

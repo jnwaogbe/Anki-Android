@@ -193,14 +193,23 @@ public class AbstractFlashcardViewerCommandTest extends RobolectricTest {
         return c;
     }
 
-    private static class CommandTestCardViewer extends AbstractFlashcardViewer {
+    private static class CommandTestCardViewer extends Reviewer {
 
         private int mFlag;
 
 
         public CommandTestCardViewer(Card currentCard) {
-            mCurrentCard = currentCard;
+            setCurrentCard(currentCard);
         }
+
+
+        @Override
+        protected void setCurrentCard(Card card) {
+            this.mCurrentCard = card;
+            // we don't have getCol() here and we don't need the additional sound processing.
+        }
+
+
         @Override
         protected void setTitle() {
             //Intentionally blank

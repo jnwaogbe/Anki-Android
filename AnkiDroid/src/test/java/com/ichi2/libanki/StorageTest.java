@@ -311,11 +311,19 @@ public class StorageTest extends RobolectricTest {
             renameKeys(expectedJson);
 
             for (String k : actualJson) {
-                remove(actualJson.getJSONObject(k), expectedJson.getJSONObject(k), "id");
-                // mod is set in V11, but not in V16
-                remove(actualJson.getJSONObject(k), expectedJson.getJSONObject(k), "mod");
+                JSONObject actualJsonModel = actualJson.getJSONObject(k);
+                JSONObject expectedJsonModel = expectedJson.getJSONObject(k);
 
-                removeSingletonReq(actualJson.getJSONObject(k), expectedJson.getJSONObject(k));
+                remove(actualJsonModel, expectedJsonModel, "id");
+                // mod is set in V11, but not in V16
+                remove(actualJsonModel, expectedJsonModel, "mod");
+
+                String name = actualJsonModel.getString("name");
+                if ("Basic (type in the answer)".equals(name) || "Cloze".equals(name)) {
+                    remove(actualJsonModel, expectedJsonModel, "req");
+                }
+
+                removeSingletonReq(actualJsonModel, expectedJsonModel);
 
 
             }
@@ -368,6 +376,11 @@ public class StorageTest extends RobolectricTest {
             JSONObject actualJson = new JSONObject(this.mConf);
             JSONObject expectedJson = new JSONObject(expectedData.mConf);
 
+            Long curModel = actualJson.getLong("curModel");
+            Long curModelEx = expectedJson.getLong("curModel");
+
+            assertModelIdsEqual(curModel, curModelEx, expectedData);
+
             remove(actualJson, expectedJson, "curModel");
             remove(actualJson, expectedJson, "creationOffset");
             remove(actualJson, expectedJson, "localOffset");
@@ -375,6 +388,17 @@ public class StorageTest extends RobolectricTest {
             String actual = JsonUtils.toOrderedString(actualJson);
             String expected = JsonUtils.toOrderedString(expectedJson);
             assertThat(actual, is(expected));
+
+            // regression: curModel
+        }
+
+
+        private void assertModelIdsEqual(Long actualMid, Long expectedMid, CollectionData expectedData) {
+            String actual = new JSONObject(this.mModels).getJSONObject(actualMid.toString()).getString("name");
+
+            String expected = new JSONObject(expectedData.mModels).getJSONObject(expectedMid.toString()).getString("name");
+
+            assertThat("current model", actual, equalTo(expected));
         }
     }
 

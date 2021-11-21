@@ -33,6 +33,7 @@ import com.ichi2.anki.analytics.UsageAnalytics;
 import com.ichi2.anki.exception.ConfirmModSchemaException;
 import com.ichi2.async.CancelListener;
 import com.ichi2.async.CollectionTask;
+import com.ichi2.libanki.TemplateManager.TemplateRenderContext.TemplateRenderOutput;
 import com.ichi2.libanki.backend.DroidBackend;
 import com.ichi2.async.ProgressSender;
 import com.ichi2.async.TaskManager;
@@ -49,6 +50,7 @@ import com.ichi2.libanki.utils.Time;
 import com.ichi2.upgrade.Upgrade;
 import com.ichi2.utils.FunctionalInterfaces;
 import com.ichi2.utils.HashUtil;
+import com.ichi2.utils.KotlinCleanup;
 import com.ichi2.utils.VersionUtils;
 
 import com.ichi2.utils.JSONArray;
@@ -77,6 +79,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
 import androidx.annotation.CheckResult;
@@ -381,8 +384,15 @@ public class Collection implements CollectionGetter {
         values.put("dty", mDty ? 1 : 0);
         values.put("usn", mUsn);
         values.put("ls", mLs);
-        values.put("conf", Utils.jsonToString(getConf()));
+        if (flushConf()) {
+            values.put("conf", Utils.jsonToString(getConf()));
+        }
         mDb.update("col", values);
+    }
+
+
+    protected boolean flushConf() {
+        return true;
     }
 
 
@@ -1109,12 +1119,14 @@ public class Collection implements CollectionGetter {
     /**
      * Returns hash of id, question, answer.
      */
+    @NonNull
     public HashMap<String, String> _renderQA(long cid, Model model, long did, int ord, String tags, String[] flist, int flags) {
         return _renderQA(cid, model, did, ord, tags, flist, flags, false, null, null);
     }
 
 
     @RustCleanup("#8951 - Remove FrontSide added to the front")
+    @NonNull
     public HashMap<String, String> _renderQA(long cid, Model model, long did, int ord, String tags, String[] flist, int flags, boolean browser, String qfmt, String afmt) {
         // data is [cid, nid, mid, did, ord, tags, flds, cardFlags]
         // unpack fields and create dict
@@ -1218,21 +1230,23 @@ public class Collection implements CollectionGetter {
      */
 
     /** Return a list of card ids */
+    @KotlinCleanup("set reasonable defaults")
     public List<Long> findCards(String search) {
-        return new Finder(this).findCards(search, null);
+        return findCards(search, new SortOrder.NoOrdering());
     }
 
-
-    /** Return a list of card ids */
-    public List<Long> findCards(String search, String order) {
+    /**
+     * @return A list of card ids
+     * @throws com.ichi2.libanki.exception.InvalidSearchException Invalid search string
+     */
+    public List<Long> findCards(String search, @NonNull SortOrder order) {
         return new Finder(this).findCards(search, order);
     }
-
-    public List<Long> findCards(String search, boolean order) {
-        return findCards(search, order, null);
-    }
-
-    public List<Long> findCards(String search, boolean order, CollectionTask.PartialSearch task) {
+    /**
+     * @return A list of card ids
+     * @throws com.ichi2.libanki.exception.InvalidSearchException Invalid search string
+     */
+    public List<Long> findCards(String search, @NonNull SortOrder order, CollectionTask.PartialSearch task) {
         return new Finder(this).findCards(search, order, task);
     }
 
@@ -1373,6 +1387,42 @@ public class Collection implements CollectionGetter {
     }
 
 
+    @Nullable
+    public TemplateRenderOutput render_output(@NonNull Card c, boolean reload, boolean browser) {
+        return render_output_legacy(c, reload, browser);
+    }
+
+
+    @NonNull
+    @RustCleanup("Hack for Card Template Previewer, needs review")
+    public TemplateRenderOutput render_output_legacy(@NonNull Card c, boolean reload, boolean browser) {
+        Note f = c.note(reload);
+        Model m = c.model();
+        JSONObject t = c.template();
+        long did;
+        if (c.isInDynamicDeck()) {
+            did = c.getODid();
+        } else {
+            did = c.getDid();
+        }
+        HashMap<String, String> qa;
+        if (browser) {
+            String bqfmt = t.getString("bqfmt");
+            String bafmt = t.getString("bafmt");
+            qa = _renderQA(c.getId(), m, did, c.getOrd(), f.stringTags(), f.getFields(), c.internalGetFlags(), browser, bqfmt, bafmt);
+        } else {
+            qa = _renderQA(c.getId(), m, did, c.getOrd(), f.stringTags(), f.getFields(), c.internalGetFlags());
+        }
+
+        return new TemplateRenderOutput(
+                qa.get("q"),
+                qa.get("a"),
+                null,
+                null,
+                c.model().getString("css"));
+    }
+
+
     @VisibleForTesting
     public static class UndoReview extends UndoAction {
         private final boolean mWasLeech;
@@ -1445,7 +1495,7 @@ public class Collection implements CollectionGetter {
         final int[] currentTask = {1};
         int totalTasks = (getModels().all().size() * 4) + 27; // a few fixes are in all-models loops, the rest are one-offs
         Runnable notifyProgress = () -> fixIntegrityProgress(progressCallback, currentTask[0]++, totalTasks);
-        FunctionalInterfaces.Consumer<FunctionalInterfaces.FunctionThrowable<Runnable, List<String>, JSONException>> executeIntegrityTask =
+        Consumer<FunctionalInterfaces.FunctionThrowable<Runnable, List<String>, JSONException>> executeIntegrityTask =
                 function -> {
                     //DEFECT: notifyProgress will lag if an exception is thrown.
                     try {
@@ -1487,29 +1537,29 @@ public class Collection implements CollectionGetter {
             }
         }
 
-        executeIntegrityTask.consume(this::deleteNotesWithMissingModel);
+        executeIntegrityTask.accept(this::deleteNotesWithMissingModel);
         // for each model
         for (Model m : getModels().all()) {
-            executeIntegrityTask.consume((callback) -> deleteCardsWithInvalidModelOrdinals(callback, m));
-            executeIntegrityTask.consume((callback) -> deleteNotesWithWrongFieldCounts(callback, m));
+            executeIntegrityTask.accept((callback) -> deleteCardsWithInvalidModelOrdinals(callback, m));
+            executeIntegrityTask.accept((callback) -> deleteNotesWithWrongFieldCounts(callback, m));
         }
-        executeIntegrityTask.consume(this::deleteNotesWithMissingCards);
-        executeIntegrityTask.consume(this::deleteCardsWithMissingNotes);
-        executeIntegrityTask.consume(this::removeOriginalDuePropertyWhereInvalid);
-        executeIntegrityTask.consume(this::removeDynamicPropertyFromNonDynamicDecks);
-        executeIntegrityTask.consume(this::removeDeckOptionsFromDynamicDecks);
-        executeIntegrityTask.consume(this::resetInvalidDeckOptions);
-        executeIntegrityTask.consume(this::rebuildTags);
-        executeIntegrityTask.consume(this::updateFieldCache);
-        executeIntegrityTask.consume(this::fixNewCardDuePositionOverflow);
-        executeIntegrityTask.consume(this::resetNewCardInsertionPosition);
-        executeIntegrityTask.consume(this::fixExcessiveReviewDueDates);
+        executeIntegrityTask.accept(this::deleteNotesWithMissingCards);
+        executeIntegrityTask.accept(this::deleteCardsWithMissingNotes);
+        executeIntegrityTask.accept(this::removeOriginalDuePropertyWhereInvalid);
+        executeIntegrityTask.accept(this::removeDynamicPropertyFromNonDynamicDecks);
+        executeIntegrityTask.accept(this::removeDeckOptionsFromDynamicDecks);
+        executeIntegrityTask.accept(this::resetInvalidDeckOptions);
+        executeIntegrityTask.accept(this::rebuildTags);
+        executeIntegrityTask.accept(this::updateFieldCache);
+        executeIntegrityTask.accept(this::fixNewCardDuePositionOverflow);
+        executeIntegrityTask.accept(this::resetNewCardInsertionPosition);
+        executeIntegrityTask.accept(this::fixExcessiveReviewDueDates);
         // v2 sched had a bug that could create decimal intervals
-        executeIntegrityTask.consume(this::fixDecimalCardsData);
-        executeIntegrityTask.consume(this::fixDecimalRevLogData);
-        executeIntegrityTask.consume(this::restoreMissingDatabaseIndices);
-        executeIntegrityTask.consume(this::ensureModelsAreNotEmpty);
-        executeIntegrityTask.consume((progressNotifier) -> this.ensureCardsHaveHomeDeck(progressNotifier, result));
+        executeIntegrityTask.accept(this::fixDecimalCardsData);
+        executeIntegrityTask.accept(this::fixDecimalRevLogData);
+        executeIntegrityTask.accept(this::restoreMissingDatabaseIndices);
+        executeIntegrityTask.accept(this::ensureModelsAreNotEmpty);
+        executeIntegrityTask.accept((progressNotifier) -> this.ensureCardsHaveHomeDeck(progressNotifier, result));
         // and finally, optimize (unable to be done inside transaction).
         try {
             optimize(notifyProgress);

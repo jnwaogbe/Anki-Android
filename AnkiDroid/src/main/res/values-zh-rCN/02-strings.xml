@@ -135,6 +135,7 @@
     <string name="card_editor_reset_card">重设学习进度</string>
     <string name="card_editor_reschedule_card" comment="Action to reschedule a card">重新安排</string>
     <string name="card_editor_preview_card" comment="Button offering to preview some card(s)">预览</string>
+    <string name="preview_progress_bar_text" comment="What card we are on out of how many in card previewer progress bar">%2$d 中的 %1$d</string>
     <string name="error_insufficient_memory">由于设备内存不足导致操作无法完成。</string>
     <string name="rename" comment="Confirm that the renaming action should be processed.">重命名</string>
     <string name="default_conf_delete_error">不能删除默认牌组</string>
@@ -326,6 +327,7 @@
     <string name="create_shortcut_failed" comment="home screen == launcher">您的主屏幕不允许 AnkiDroid 添加快捷方式</string>
     <string name="create_shortcut_error">添加快捷方式时出错：%s</string>
     <string name="note_editor_capitalize" comment="This is for a switch with a checkbox - on: enabled">大写句子</string>
+    <string name="menu_scroll_toolbar" comment="Checkbox stating whether note editor toolbar is scrollable or stacked. Checked: Scroll">滚动工具栏</string>
     <!-- Symbols used as Button text in IncrementNumberRangePreference -->
     <string name="plus_sign" comment="Label for increment button in IncrementerNumberRangePreference">+</string>
     <string name="minus_sign" comment="Label for decrement button in IncrementerNumberRangePreference">-</string>
@@ -352,5 +354,12 @@
     <string name="import_mapped_to_field">已映射到 %s</string>
     <string name="import_mapped_to_tags">映射到标签</string>
     <string name="import_mapped_to_nothing">已忽略</string>
+    <!-- Reviewer actions -->
     <string name="buried_card">搁置的卡片</string>
+    <string name="buried_note">隐藏的笔记</string>
+    <string name="deleted_note">删除的笔记</string>
+    <string name="suspended_card">搁置的卡牌</string>
+    <string name="suspended_note">搁置的笔记</string>
+    <!--  Note Editor Toggle Sticky  -->
+    <string name="note_editor_toggle_sticky">固定字段 %s</string>
 </resources>

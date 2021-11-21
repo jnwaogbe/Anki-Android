@@ -35,9 +35,12 @@ import com.ichi2.anki.StudyOptionsFragment;
 import com.ichi2.anki.TemporaryModel;
 import com.ichi2.anki.exception.ConfirmModSchemaException;
 import com.ichi2.anki.exception.ImportExportException;
+import com.ichi2.anki.servicelayer.NoteService;
+import com.ichi2.anki.servicelayer.SearchService.SearchCardsResult;
 import com.ichi2.libanki.Media;
 import com.ichi2.libanki.Model;
 import com.ichi2.libanki.Models;
+import com.ichi2.libanki.SortOrder;
 import com.ichi2.libanki.UndoAction;
 import com.ichi2.libanki.WrongId;
 import com.ichi2.libanki.sched.AbstractSched;
@@ -312,6 +315,48 @@ public class CollectionTask<Progress, Result> extends BaseAsyncTask<Void, Progre
 
         public boolean isFromReviewer() {
             return mFromReviewer;
+        }
+    }
+
+
+    public static class UpdateMultipleNotes extends TaskDelegate<List<Note>, Computation<?>> {
+        private final List<Note> mNotesToUpdate;
+        private final boolean mShouldUpdateCards;
+
+
+        public UpdateMultipleNotes(List<Note> notesToUpdate) {
+            this(notesToUpdate, false);
+        }
+
+
+        public UpdateMultipleNotes(List<Note> notesToUpdate, boolean shouldUpdateCards) {
+            mNotesToUpdate = notesToUpdate;
+            mShouldUpdateCards = shouldUpdateCards;
+        }
+
+
+        @Override
+        protected Computation<?> task(@NonNull Collection col, @NonNull ProgressSenderAndCancelListener<List<Note>> collectionTask) {
+            Timber.d("doInBackgroundUpdateMultipleNotes");
+
+            try {
+                col.getDb().executeInTransaction(() -> {
+                    for (Note note : mNotesToUpdate) {
+                        note.flush();
+                        if (mShouldUpdateCards) {
+                            for (Card card : note.cards()) {
+                                card.flush();
+                            }
+                        }
+                    }
+                    collectionTask.doProgress(mNotesToUpdate);
+                });
+            } catch (RuntimeException e) {
+                Timber.w(e, "doInBackgroundUpdateMultipleNotes - RuntimeException on updating multiple note");
+                AnkiDroidApp.sendExceptionReport(e, "doInBackgroundUpdateMultipleNotes");
+                return ERR;
+            }
+            return OK;
         }
     }
 
@@ -617,7 +662,7 @@ public class CollectionTask<Progress, Result> extends BaseAsyncTask<Void, Progre
             List<Note> originalUnmarked = new ArrayList<>();
 
             for (Note n : notes) {
-                if (n.hasTag("marked"))
+                if (NoteService.isMarked(n))
                     originalMarked.add(n);
                 else
                     originalUnmarked.add(n);
@@ -818,15 +863,15 @@ public class CollectionTask<Progress, Result> extends BaseAsyncTask<Void, Progre
     }
 
 
-    public static class SearchCards extends TaskDelegate<List<CardBrowser.CardCache>, List<CardBrowser.CardCache>> {
+    public static class SearchCards extends TaskDelegate<List<CardBrowser.CardCache>, SearchCardsResult> {
         private final String mQuery;
-        private final boolean mOrder;
+        private final SortOrder mOrder;
         private final int mNumCardsToRender;
         private final int mColumn1Index;
         private final int mColumn2Index;
 
 
-        public SearchCards(String query, boolean order, int numCardsToRender, int column1Index, int column2Index) {
+        public SearchCards(String query, SortOrder order, int numCardsToRender, int column1Index, int column2Index) {
             this.mQuery = query;
             this.mOrder = order;
             this.mNumCardsToRender = numCardsToRender;
@@ -835,14 +880,22 @@ public class CollectionTask<Progress, Result> extends BaseAsyncTask<Void, Progre
         }
 
 
-        protected List<CardBrowser.CardCache> task(@NonNull Collection col, @NonNull ProgressSenderAndCancelListener<List<CardBrowser.CardCache>> collectionTask) {
+        protected SearchCardsResult task(@NonNull Collection col, @NonNull ProgressSenderAndCancelListener<List<CardBrowser.CardCache>> collectionTask) {
             Timber.d("doInBackgroundSearchCards");
             if (collectionTask.isCancelled()) {
                 Timber.d("doInBackgroundSearchCards was cancelled so return null");
-                return null;
+                return SearchCardsResult.invalidResult();
             }
             List<CardBrowser.CardCache> searchResult = new ArrayList<>();
-            List<Long> searchResult_ = col.findCards(mQuery, mOrder, new PartialSearch(searchResult, mColumn1Index, mColumn2Index, mNumCardsToRender, collectionTask, col));
+            List<Long> searchResult_;
+            try {
+                searchResult_ = col.findCards(mQuery, mOrder, new PartialSearch(searchResult, mColumn1Index, mColumn2Index, mNumCardsToRender, collectionTask, col));
+            } catch (Exception e) {
+                // exception can occur via normal operation
+                Timber.w(e);
+                return SearchCardsResult.error(e);
+            }
+
             Timber.d("The search found %d cards", searchResult_.size());
             int position = 0;
             for (Long cid : searchResult_) {
@@ -853,16 +906,16 @@ public class CollectionTask<Progress, Result> extends BaseAsyncTask<Void, Progre
             for (int i = 0; i < Math.min(mNumCardsToRender, searchResult.size()); i++) {
                 if (collectionTask.isCancelled()) {
                     Timber.d("doInBackgroundSearchCards was cancelled so return null");
-                    return null;
+                    return SearchCardsResult.invalidResult();
                 }
                 searchResult.get(i).load(false, mColumn1Index, mColumn2Index);
             }
             // Finish off the task
             if (collectionTask.isCancelled()) {
                 Timber.d("doInBackgroundSearchCards was cancelled so return null");
-                return null;
+                return SearchCardsResult.invalidResult();
             } else {
-                return searchResult;
+                return SearchCardsResult.success(searchResult);
             }
         }
     }
@@ -1702,7 +1755,7 @@ public class CollectionTask<Progress, Result> extends BaseAsyncTask<Void, Progre
                 }
                 Card card = c.getCard();
                 hasUnsuspended = hasUnsuspended || card.getQueue() != Consts.QUEUE_TYPE_SUSPENDED;
-                hasUnmarked = hasUnmarked || !card.note().hasTag("marked");
+                hasUnmarked = hasUnmarked || !NoteService.isMarked(card.note());
                 if (hasUnsuspended && hasUnmarked)
                     break;
             }

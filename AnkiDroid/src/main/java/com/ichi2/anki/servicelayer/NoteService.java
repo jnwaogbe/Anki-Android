@@ -80,13 +80,6 @@ public class NoteService {
     }
 
 
-    public static void updateMultimediaNoteFromJsonNote(Collection col, final Note editorNoteSrc, final IMultimediaEditableNote noteDst) {
-        if (noteDst instanceof MultimediaEditableNote) {
-            updateMultimediaNoteFromFields(col, editorNoteSrc.getFields(), editorNoteSrc.getMid(), (MultimediaEditableNote) noteDst);
-        }
-    }
-
-
     public static void updateMultimediaNoteFromFields(Collection col, String[] fields, long modelId, MultimediaEditableNote mmNote) {
         for (int i = 0; i < fields.length; i++) {
             String value = fields[i];
@@ -104,6 +97,7 @@ public class NoteService {
             mmNote.setField(i, field);
         }
         mmNote.setModelId(modelId);
+        mmNote.freezeInitialFieldValues();
         // TODO: set current id of the note as well
     }
 
@@ -251,6 +245,21 @@ public class NoteService {
         }
         return fieldData.replace(FieldEditText.NEW_LINE, "<br>");
     }
+
+
+    public static void toggleMark(@NonNull Note note) {
+        if (isMarked(note)) {
+            note.delTag("marked");
+        } else {
+            note.addTag("marked");
+        }
+        note.flush();
+    }
+
+    public static boolean isMarked(@NonNull Note note) {
+        return note.hasTag("marked");
+    }
+
 
     public interface NoteField {
         int getOrd();

@@ -55,11 +55,7 @@ import org.robolectric.android.controller.ActivityController
 import org.robolectric.shadows.ShadowDialog
 import org.robolectric.shadows.ShadowLog
 import timber.log.Timber
-import java.lang.Exception
-import java.lang.IllegalArgumentException
-import java.lang.IllegalStateException
-import java.lang.RuntimeException
-import java.util.ArrayList
+import java.util.*
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
@@ -314,6 +310,14 @@ open class RobolectricTest : CollectionGetter {
         return startActivityNormallyOpenCollectionWithIntent(this, clazz, i)
     }
 
+    protected inline fun <reified T : AnkiActivity?> startRegularActivity(): T {
+        return startRegularActivity(null)
+    }
+
+    protected inline fun <reified T : AnkiActivity?> startRegularActivity(i: Intent? = null): T {
+        return startActivityNormallyOpenCollectionWithIntent(T::class.java, i)
+    }
+
     protected fun addNoteUsingBasicModel(front: String?, back: String?): Note {
         return addNoteUsingModelName("Basic", front, back)
     }
@@ -353,8 +357,10 @@ open class RobolectricTest : CollectionGetter {
         for (field in fields) {
             addField(model, field)
         }
-        model.put(FlashCardsContract.CardTemplate.QUESTION_FORMAT, qfmt)
-        model.put(FlashCardsContract.CardTemplate.ANSWER_FORMAT, afmt)
+        val t = Models.newTemplate("Card 1")
+        t.put("qfmt", qfmt)
+        t.put("afmt", afmt)
+        col.models.addTemplateInNewModel(model, t)
         col.models.add(model)
         col.models.flush()
         return name

@@ -83,7 +83,6 @@ class TypeAnswer(
      */
     fun updateInfo(card: Card, res: Resources) {
         correct = null
-        input = ""
         val q = card.q(false)
         val m = PATTERN.matcher(q)
         var clozeIdx = 0
@@ -94,7 +93,7 @@ class TypeAnswer(
         // if it's a cloze, extract data
         if (fldTag.startsWith("cloze:")) {
             // get field and cloze position
-            clozeIdx = card.getOrd() + 1
+            clozeIdx = card.ord + 1
             fldTag = fldTag.split(":").toTypedArray()[1]
         }
         // loop through fields for a match
@@ -137,7 +136,7 @@ class TypeAnswer(
      * @param buf The question text
      * @return The formatted question text
      */
-    fun filterQuestion(buf: String): String? {
+    fun filterQuestion(buf: String): String {
         val m = PATTERN.matcher(buf)
         if (warning != null) {
             return m.replaceFirst(warning!!)

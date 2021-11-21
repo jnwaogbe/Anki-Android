@@ -111,6 +111,7 @@
     <!-- Images -->
     <attr name="navDrawerImage" format="integer"/>
     <attr name="attachFileImage" format="integer"/>
+    <attr name="toggleStickyImage" format="integer"/>
     <attr name="upDownImage" format="integer"/>
     <attr name="dialogErrorIcon" format="integer"/>
     <attr name="dialogSyncErrorIcon" format="integer"/>
@@ -126,4 +127,8 @@
     <attr name="popupBackgroundColor" format="reference"/>
 
     <attr name="editTextDisabled" format="color"/>
+
+    <declare-styleable name="CheckBoxTriStates">
+        <attr name="cycle_back_to_indeterminate" format="boolean" />
+    </declare-styleable>
 </resources>

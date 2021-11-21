@@ -104,6 +104,7 @@
     <string name="multimedia_editor_progress_wait_title">صبر کنید</string>
     <!-- not a good message, when an unexpected error happens -->
     <string name="multimedia_editor_something_wrong">متأسفیم، مشکلی به وجود آمد</string>
+    <string name="multimedia_editor_svg_preview">SVGs are not available for preview</string>
     <string name="multimedia_editor_png_paste_error">Error converting clipboard image to png: %s</string>
     <string name="multimedia_editor_attach_mm_content" comment="used for screen readers. Not visible to the user">ضمیمه کردن محتوای چند رسانه ای به زمینه %1$s</string>
     <string name="multimedia_editor_attach_media">ضمیمه رسانه</string>
@@ -123,4 +124,5 @@
     <string name="save_dialog_content">حجم فعلی تصویر %s مگابایت است. حداکثر حجم پیش‌فرض تصویر یک مگابایت است. آیا می‌خواهید تصویر را برش دهید؟</string>
     <string name="select_image_failed">"انتخاب تصویر انجام نشد، لطفاً دوباره تلاش کنید"</string>
     <string name="activity_result_unexpected">نرم‌افزار مقداری نامعتبر را وارد کرد. احتمالاً باید از نرم‌افزار دیگری استفاده کنید</string>
+    <string name="audio_recording_field_list" comment="Displays a list of the field data in the note editor while audio recording is taking place">Field Contents</string>
 </resources>
