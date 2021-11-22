@@ -267,7 +267,7 @@ public class Preferences extends AnkiActivity {
                 return true;
             }
         });
-
+        
         menuItem.setOnActionExpandListener(new MenuItem.OnActionExpandListener() {
             @Override
             public boolean onMenuItemActionExpand(MenuItem menuItem) {
