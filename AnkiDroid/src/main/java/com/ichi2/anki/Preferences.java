@@ -42,7 +42,6 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.WindowManager.BadTokenException;
 import android.webkit.URLUtil;
-import android.widget.Toast;
 
 import com.afollestad.materialdialogs.MaterialDialog;
 import com.ichi2.anim.ActivityTransitionAnimation;
@@ -233,6 +232,7 @@ public class Preferences extends AnkiActivity {
         getSupportFragmentManager()
                 .beginTransaction()
                 .replace(R.id.settings_container, fragment, "headerFragment")
+                .addToBackStack(null)
                 .commit();
     }
 
@@ -255,7 +255,7 @@ public class Preferences extends AnkiActivity {
             @Override
             public boolean onQueryTextSubmit(String s) {
                 searchView.clearFocus();
-                //searchView.setEnabled(false);
+                searchView.setEnabled(false);
                 return true;
             }
 
@@ -279,8 +279,6 @@ public class Preferences extends AnkiActivity {
 
             @Override
             public boolean onMenuItemActionCollapse(MenuItem menuItem) {
-                    searchView.setVisibility(View.INVISIBLE);
-                    getSupportFragmentManager().beginTransaction().remove(searchFragment).commit();
                     getSupportFragmentManager().popBackStack();
                 return true;
             }
@@ -616,103 +614,43 @@ public class Preferences extends AnkiActivity {
     // ----------------------------------------------------------------------------
 
     public static class HeaderFragment extends PreferenceFragmentCompat {
-        PreferencesSearchConfiguration searchConfig;
-
         @Override
         public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
-            //searchConfig = new PreferencesSearchConfiguration(this, getContext());
             setPreferencesFromResource(R.xml.preference_headers, rootKey);
 
             if (AdaptionUtil.isRestrictedLearningDevice()) {
                 this.findPreference("pref_screen_advanced").setVisible(false);
             }
         }
-
-        public int getPreferenceResource() {
-            return R.xml.preference_headers;
-        };
-
-        public List<String> getPreferenceTitles() {
-            this.getPreferenceManager().getSharedPreferences();
-            return getTitles(getPreferenceScreen());
-        }
-
-        public HashMap<String, String> getPreferencesConfig() {
-                HashMap<String, String> config = new HashMap<>();
-                PreferenceScreen screen = getPreferenceScreen();
-
-                if (screen != null) {
-                    for (int i = 0; i < screen.getPreferenceCount(); ++i) {
-                        Preference preference = screen.getPreference(i);
-                        if (preference instanceof PreferenceGroup) {
-                            PreferenceGroup preferenceGroup = (PreferenceGroup) preference;
-                            for (int j = 0; j < preferenceGroup.getPreferenceCount(); ++j) {
-                                Preference nestedPreference = preferenceGroup.getPreference(j);
-                                if (nestedPreference instanceof PreferenceGroup) {
-                                    PreferenceGroup nestedPreferenceGroup = (PreferenceGroup) nestedPreference;
-                                    for (int k = 0; k < nestedPreferenceGroup.getPreferenceCount(); ++k) {
-                                        //initPreference(nestedPreferenceGroup.getPreference(k));
-                                        //preferenceTitles.add((String) nestedPreferenceGroup.getPreference(k).getTitle());
-                                        Preference preference1 = nestedPreferenceGroup.getPreference(k);
-                                        config.put((String) preference1.getTitle(), preference1.getFragment());
-
-                                    }
-                                } else {
-                                    //initPreference(preferenceGroup.getPreference(j));
-                                    //preferenceTitles.add((String) preferenceGroup.getPreference(j).getTitle());
-                                    Preference preference2 = preferenceGroup.getPreference(j);
-                                    config.put((String) preference2.getTitle(), preference2.getFragment());
-                                }
-                            }
-                        } else {
-                            //initPreference(preference);
-                            //preferenceTitles.add((String) preference.getTitle());
-                            config.put((String) preference.getTitle(), preference.getFragment());
-                        }
-                    }
-                }
-                return config;
-            }
-
-
-
-        /**
-         * Loop over every preference in the list and set the summary text
-         */
-        private List<String> getTitles(PreferenceScreen screen) {
-            List<String> preferenceTitles = new ArrayList<String>();
-
-            if (screen != null) {
-                for (int i = 0; i < screen.getPreferenceCount(); ++i) {
-                    Preference preference = screen.getPreference(i);
-
-                    if (preference instanceof PreferenceGroup) {
-                        PreferenceGroup preferenceGroup = (PreferenceGroup) preference;
-                        for (int j = 0; j < preferenceGroup.getPreferenceCount(); ++j) {
-                            Preference nestedPreference = preferenceGroup.getPreference(j);
-                            if (nestedPreference instanceof PreferenceGroup) {
-                                PreferenceGroup nestedPreferenceGroup = (PreferenceGroup) nestedPreference;
-                                for (int k = 0; k < nestedPreferenceGroup.getPreferenceCount(); ++k) {
-                                    //initPreference(nestedPreferenceGroup.getPreference(k));
-                                    preferenceTitles.add((String) nestedPreferenceGroup.getPreference(k).getTitle());
-                                }
-                            } else {
-                                //initPreference(preferenceGroup.getPreference(j));
-                                preferenceTitles.add((String) preferenceGroup.getPreference(j).getTitle());
-                            }
-                        }
-                    } else {
-                        //initPreference(preference);
-                        preferenceTitles.add((String) preference.getTitle());
-                    }
-                }
-            }
-            return preferenceTitles;
-        }
     }
 
 
+
+
+
     public abstract static class SettingsFragment extends PreferenceFragmentCompat implements OnSharedPreferenceChangeListener {
+        @Override
+        public void onCreate(Bundle savedInstanceState) {
+            super.onCreate(savedInstanceState);
+
+            hasOptionsMenu();
+        }
+
+        @Override
+        public void onPrepareOptionsMenu(Menu menu) {
+            MenuItem item=  menu.findItem(R.id.action_search);
+            if  (item != null) {
+                item.setVisible(false);
+
+                SearchView searchView = (SearchView) item.getActionView();
+
+                if (searchView != null) {
+                    searchView.clearFocus();
+                    searchView.setVisibility(View.INVISIBLE);
+                }
+            }
+        }
+
         @Override
         public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
             String screenName = getAnalyticsScreenNameConstant();

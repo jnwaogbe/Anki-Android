@@ -62,9 +62,12 @@ public class PreferencesSearchFragment extends Fragment implements PreferencesSe
 
             getParentFragmentManager()
                     .beginTransaction()
-                    .replace(R.id.settings_container, preferenceFragment)
+                    .remove(this)
+                    .add(R.id.settings_container, preferenceFragment)
                     .addToBackStack(null)
                     .commit();
+
+            preferencesList.clear();
         }
     }
 }
