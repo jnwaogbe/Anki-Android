@@ -39,8 +39,10 @@ import android.provider.MediaStore;
 import android.text.TextUtils;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
 import android.view.WindowManager.BadTokenException;
 import android.webkit.URLUtil;
+import android.widget.Toast;
 
 import com.afollestad.materialdialogs.MaterialDialog;
 import com.ichi2.anim.ActivityTransitionAnimation;
@@ -71,7 +73,7 @@ import com.ichi2.utils.AdaptionUtil;
 import com.ichi2.utils.LanguageUtil;
 import com.ichi2.anki.analytics.UsageAnalytics;
 import com.ichi2.utils.VersionUtils;
-import com.mancj.materialsearchbar.MaterialSearchBar;
+//import com.mancj.materialsearchbar.MaterialSearchBar;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -200,6 +202,9 @@ public class Preferences extends AnkiActivity {
      */
     private String mOldCollectionPath = null;
 
+    private SearchView searchView;
+    private PreferencesSearchFragment searchFragment;
+    private PreferencesSearchConfiguration searchConfiguration;
 
     public static final String EXTRA_SHOW_FRAGMENT = ":android:show_fragment";
 
@@ -223,11 +228,12 @@ public class Preferences extends AnkiActivity {
         // onRestoreInstanceState takes priority, this is only set on init.
         mOldCollectionPath = CollectionHelper.getCollectionPath(this);
 
+        searchConfiguration = new PreferencesSearchConfiguration(this);
+
         getSupportFragmentManager()
                 .beginTransaction()
-                .replace(R.id.settings_container, fragment)
+                .replace(R.id.settings_container, fragment, "headerFragment")
                 .commit();
-
     }
 
 
@@ -238,32 +244,24 @@ public class Preferences extends AnkiActivity {
         MenuItem menuItem = menu.findItem(R.id.preferences_search);
 
         SearchManager searchManager = (SearchManager) getSystemService(Context.SEARCH_SERVICE);
-        SearchView searchView = (SearchView) menuItem.getActionView();
+        searchView = (SearchView) menuItem.getActionView();
 
         searchView.setQueryHint(getText(R.string.preferences_search_hint));
         searchView.setSearchableInfo(searchManager.getSearchableInfo(getComponentName()));
 
-        List<String> preferencesList = new ArrayList<>();
-
-        preferencesList.add("Test 1");
-        preferencesList.add("Test 2");
-        preferencesList.add("Test 3");
-        preferencesList.add("Test 4");
-        preferencesList.add("Test 5");
-
-        PreferencesSearchRecyclerAdapter adapter = new PreferencesSearchRecyclerAdapter(preferencesList);
-        PreferencesSearchFragment searchFragment = new PreferencesSearchFragment(adapter);
+        searchFragment = new PreferencesSearchFragment(searchConfiguration.getSearchOptions());
 
         searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
             @Override
             public boolean onQueryTextSubmit(String s) {
-                //Update contents of the fragment
+                searchView.clearFocus();
+                //searchView.setEnabled(false);
                 return true;
             }
 
             @Override
             public boolean onQueryTextChange(String s) {
-                adapter.getFilter().filter(s);
+                searchFragment.getAdapter().getFilter().filter(s);
                 return true;
             }
         });
@@ -274,21 +272,22 @@ public class Preferences extends AnkiActivity {
                 getSupportFragmentManager()
                         .beginTransaction()
                         .replace(R.id.settings_container, searchFragment)
-                        .addToBackStack(null)
                         .commit();
+
                 return true;
             }
 
             @Override
             public boolean onMenuItemActionCollapse(MenuItem menuItem) {
-                getSupportFragmentManager().popBackStack();
+                    searchView.setVisibility(View.INVISIBLE);
+                    getSupportFragmentManager().beginTransaction().remove(searchFragment).commit();
+                    getSupportFragmentManager().popBackStack();
                 return true;
             }
         });
 
         return true;
     }
-
 
     @NonNull
     private Fragment getInitialFragment(Intent intent) {
@@ -316,6 +315,7 @@ public class Preferences extends AnkiActivity {
             onBackPressed();
             return true;
         }
+
         return false;
     }
 
@@ -359,6 +359,9 @@ public class Preferences extends AnkiActivity {
     // Class methods
     // ----------------------------------------------------------------------------
 
+    private List<String> generatePreferencesSearchStrings() {
+        return null;
+    }
 
     /**
      * Loop over every preference in the list and set the summary text
@@ -613,13 +616,98 @@ public class Preferences extends AnkiActivity {
     // ----------------------------------------------------------------------------
 
     public static class HeaderFragment extends PreferenceFragmentCompat {
+        PreferencesSearchConfiguration searchConfig;
+
         @Override
         public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
+            //searchConfig = new PreferencesSearchConfiguration(this, getContext());
             setPreferencesFromResource(R.xml.preference_headers, rootKey);
 
             if (AdaptionUtil.isRestrictedLearningDevice()) {
                 this.findPreference("pref_screen_advanced").setVisible(false);
             }
+        }
+
+        public int getPreferenceResource() {
+            return R.xml.preference_headers;
+        };
+
+        public List<String> getPreferenceTitles() {
+            this.getPreferenceManager().getSharedPreferences();
+            return getTitles(getPreferenceScreen());
+        }
+
+        public HashMap<String, String> getPreferencesConfig() {
+                HashMap<String, String> config = new HashMap<>();
+                PreferenceScreen screen = getPreferenceScreen();
+
+                if (screen != null) {
+                    for (int i = 0; i < screen.getPreferenceCount(); ++i) {
+                        Preference preference = screen.getPreference(i);
+                        if (preference instanceof PreferenceGroup) {
+                            PreferenceGroup preferenceGroup = (PreferenceGroup) preference;
+                            for (int j = 0; j < preferenceGroup.getPreferenceCount(); ++j) {
+                                Preference nestedPreference = preferenceGroup.getPreference(j);
+                                if (nestedPreference instanceof PreferenceGroup) {
+                                    PreferenceGroup nestedPreferenceGroup = (PreferenceGroup) nestedPreference;
+                                    for (int k = 0; k < nestedPreferenceGroup.getPreferenceCount(); ++k) {
+                                        //initPreference(nestedPreferenceGroup.getPreference(k));
+                                        //preferenceTitles.add((String) nestedPreferenceGroup.getPreference(k).getTitle());
+                                        Preference preference1 = nestedPreferenceGroup.getPreference(k);
+                                        config.put((String) preference1.getTitle(), preference1.getFragment());
+
+                                    }
+                                } else {
+                                    //initPreference(preferenceGroup.getPreference(j));
+                                    //preferenceTitles.add((String) preferenceGroup.getPreference(j).getTitle());
+                                    Preference preference2 = preferenceGroup.getPreference(j);
+                                    config.put((String) preference2.getTitle(), preference2.getFragment());
+                                }
+                            }
+                        } else {
+                            //initPreference(preference);
+                            //preferenceTitles.add((String) preference.getTitle());
+                            config.put((String) preference.getTitle(), preference.getFragment());
+                        }
+                    }
+                }
+                return config;
+            }
+
+
+
+        /**
+         * Loop over every preference in the list and set the summary text
+         */
+        private List<String> getTitles(PreferenceScreen screen) {
+            List<String> preferenceTitles = new ArrayList<String>();
+
+            if (screen != null) {
+                for (int i = 0; i < screen.getPreferenceCount(); ++i) {
+                    Preference preference = screen.getPreference(i);
+
+                    if (preference instanceof PreferenceGroup) {
+                        PreferenceGroup preferenceGroup = (PreferenceGroup) preference;
+                        for (int j = 0; j < preferenceGroup.getPreferenceCount(); ++j) {
+                            Preference nestedPreference = preferenceGroup.getPreference(j);
+                            if (nestedPreference instanceof PreferenceGroup) {
+                                PreferenceGroup nestedPreferenceGroup = (PreferenceGroup) nestedPreference;
+                                for (int k = 0; k < nestedPreferenceGroup.getPreferenceCount(); ++k) {
+                                    //initPreference(nestedPreferenceGroup.getPreference(k));
+                                    preferenceTitles.add((String) nestedPreferenceGroup.getPreference(k).getTitle());
+                                }
+                            } else {
+                                //initPreference(preferenceGroup.getPreference(j));
+                                preferenceTitles.add((String) preferenceGroup.getPreference(j).getTitle());
+                            }
+                        }
+                    } else {
+                        //initPreference(preference);
+                        preferenceTitles.add((String) preference.getTitle());
+                    }
+                }
+            }
+            return preferenceTitles;
         }
     }
 

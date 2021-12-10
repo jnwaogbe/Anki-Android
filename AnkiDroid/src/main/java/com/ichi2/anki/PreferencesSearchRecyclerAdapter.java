@@ -6,7 +6,6 @@ import android.view.ViewGroup;
 import android.widget.Filter;
 import android.widget.Filterable;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -16,12 +15,14 @@ import androidx.recyclerview.widget.RecyclerView;
 
 public class PreferencesSearchRecyclerAdapter extends RecyclerView.Adapter<PreferencesSearchRecyclerAdapter.ViewHolder> implements Filterable
 {
-    private List<String> preferencesList;
-    private List<String> preferencesListAll;
+    private List<PreferencesSearchOptions> preferencesList;
+    private List<PreferencesSearchOptions> preferencesListAll;
+    private PreferencesSearchListener listener;
 
-    public PreferencesSearchRecyclerAdapter(List<String> preferencesList) {
+    public PreferencesSearchRecyclerAdapter( List<PreferencesSearchOptions> preferencesList, PreferencesSearchListener listener) {
         this.preferencesList = preferencesList;
         this.preferencesListAll = new ArrayList<>(preferencesList);
+        this.listener = listener;
     }
 
     @NonNull
@@ -30,7 +31,7 @@ public class PreferencesSearchRecyclerAdapter extends RecyclerView.Adapter<Prefe
         LayoutInflater layoutInflater = LayoutInflater.from(parent.getContext());
         View view = layoutInflater.inflate(R.layout.preferences_search_list_item, parent, false);
 
-        ViewHolder viewHolder = new ViewHolder(view);
+        ViewHolder viewHolder = new ViewHolder(view, listener);
 
         return viewHolder;
     }
@@ -38,7 +39,7 @@ public class PreferencesSearchRecyclerAdapter extends RecyclerView.Adapter<Prefe
 
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-        holder.preferencesName.setText(preferencesList.get(position));
+        holder.preferencesName.setText(preferencesList.get(position).getSearchString());
     }
 
 
@@ -56,14 +57,15 @@ public class PreferencesSearchRecyclerAdapter extends RecyclerView.Adapter<Prefe
     private Filter filter = new Filter() {
         @Override
         protected FilterResults performFiltering(CharSequence charSequence) {
-            List<String> filteredList = new ArrayList<>();
+            List<PreferencesSearchOptions> filteredList = new ArrayList<>();
 
             if (charSequence.toString().isEmpty()) {
                 filteredList.clear();
             } else {
-                for (String preference: preferencesListAll) {
+                for (PreferencesSearchOptions options: preferencesListAll) {
+                    String preference = options.getSearchString();
                     if (preference.toLowerCase().contains(charSequence.toString().toLowerCase())) {
-                        filteredList.add(preference);
+                        filteredList.add(options);
                     }
                 }
             }
@@ -84,22 +86,27 @@ public class PreferencesSearchRecyclerAdapter extends RecyclerView.Adapter<Prefe
     };
 
     class ViewHolder extends RecyclerView.ViewHolder implements View.OnClickListener {
+        private PreferencesSearchListener listener;
+        private TextView preferencesName;
 
-        TextView preferencesName;
-
-        public ViewHolder(@NonNull View itemView) {
+        public ViewHolder(@NonNull View itemView, PreferencesSearchListener listener) {
             super(itemView);
 
             preferencesName = itemView.findViewById(R.id.prefs_search_name);
             preferencesName.setElegantTextHeight(true);
 
             itemView.setOnClickListener(this);
-        }
+            this.listener = listener;
 
+        }
 
         @Override
-        public void onClick(View view) {
-            Toast.makeText(view.getContext(),"Should navigate to: " + preferencesList.get(getBindingAdapterPosition()), Toast.LENGTH_SHORT);
+        public void onClick(View v) {
+            this.listener.onSearchSuggestionSelected(getBindingAdapterPosition());
         }
+    }
+
+    public interface PreferencesSearchListener {
+        void onSearchSuggestionSelected(int position);
     }
 }
