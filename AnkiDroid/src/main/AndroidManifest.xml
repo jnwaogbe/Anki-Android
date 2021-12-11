@@ -266,6 +266,10 @@
             <intent-filter>
                 <category android:name="android.intent.category.MONKEY" />
             </intent-filter>
+            <meta-data
+                android:name="android.app.searchable"
+                android:resource="@xml/preferences_searchable"
+                />
         </activity>
         <activity
             android:name="com.ichi2.anki.DeckOptions"
