@@ -15,6 +15,7 @@ import static org.junit.Assert.assertTrue;
 @RunWith(AndroidJUnit4.class)
 public class PreferencesSearchConfigurationTest {
     @Test
+    // CS427 https://github.com/ankidroid/Anki-Android/issues/8342
     public void getSearchOptions() {
         PreferencesSearchConfiguration config = new PreferencesSearchConfiguration(getApplicationContext());
         List<PreferencesSearchOptions> options = config.getSearchOptions();
