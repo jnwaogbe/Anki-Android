@@ -1,6 +1,7 @@
 package com.ichi2.anki;
 
 import android.content.Context;
+import android.content.res.Resources;
 import android.content.res.XmlResourceParser;
 import android.util.AttributeSet;
 
@@ -9,26 +10,27 @@ import org.xmlpull.v1.XmlPullParserException;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
-import androidx.fragment.app.Fragment;
 import androidx.preference.PreferenceFragmentCompat;
 import timber.log.Timber;
 
-import static com.ichi2.anki.Preferences.HeaderFragment;
-import static com.ichi2.anki.Preferences.GeneralSettingsFragment;
-import static com.ichi2.anki.Preferences.ReviewingSettingsFragment;
-import static com.ichi2.anki.Preferences.AppearanceSettingsFragment;
-import static com.ichi2.anki.Preferences.GesturesSettingsFragment;
-import static com.ichi2.anki.Preferences.ControlsSettingsFragment;
-import static com.ichi2.anki.Preferences.AdvancedSettingsFragment;
+import com.ichi2.anki.Preferences.GeneralSettingsFragment;
+import com.ichi2.anki.Preferences.ReviewingSettingsFragment;
+import com.ichi2.anki.Preferences.AppearanceSettingsFragment;
+import com.ichi2.anki.Preferences.GesturesSettingsFragment;
+import com.ichi2.anki.Preferences.ControlsSettingsFragment;
+import com.ichi2.anki.Preferences.AdvancedSettingsFragment;
 
+/**
+ * Preferences Search Configuration for generating search suggestions.
+ */
 public class PreferencesSearchConfiguration {
-    private List<PreferencesSearchOptions> searchOptions = new ArrayList<>();
+    private final List<PreferencesSearchOptions> searchOptions;
+    private final static String PREFERENCE_SCREEN_TAG = "PreferenceScreen";
 
-    public PreferencesSearchConfiguration(Context context) {
+    public PreferencesSearchConfiguration(final Context context) {
+        searchOptions = new ArrayList<>();
         searchOptions.addAll(
                 readPreferencesXML(
                         new GeneralSettingsFragment(),
@@ -74,57 +76,58 @@ public class PreferencesSearchConfiguration {
     }
 
 
-    private List<PreferencesSearchOptions> readPreferencesXML(PreferenceFragmentCompat fragment, int xmlResource, Context context) {
-        List<PreferencesSearchOptions> options = new ArrayList<>();
-
-        XmlResourceParser parser = context.getResources().getXml(xmlResource);
+    private List<PreferencesSearchOptions> readPreferencesXML(final PreferenceFragmentCompat fragment, int xmlResource, final Context context) {
+        final List<PreferencesSearchOptions> options = new ArrayList<>();
+        final Resources resources = context.getResources();
+        final XmlResourceParser parser = resources.getXml(xmlResource);
 
         try {
             int eventType = parser.getEventType();
             String screenTitle = null;
 
             while (eventType != XmlPullParser.END_DOCUMENT) {
-                switch (eventType) {
-                    case XmlPullParser.START_TAG:
-                        String namespace = "http://schemas.android.com/apk/res/android";
-                        String searchString = getAttributeStringValue(parser, context, namespace, "title");
-                        String key = getAttributeStringValue(parser, context, namespace, "key");
-                        PreferencesSearchOptions option;
+                if (eventType == XmlPullParser.START_TAG) {
+                    final String namespace = "http://schemas.android.com/apk/res/android";
+                    final String searchString = getAttributeStringValue(parser, context, namespace, "title");
+                    final String key = getAttributeStringValue(parser, context, namespace, "key");
+                    final PreferencesSearchOptions option = new PreferencesSearchOptions();
 
-                        if (searchString != null) {
-                            if (parser.getName() == "PreferenceScreen") {
-                                option = new PreferencesSearchOptions(searchString, null, fragment);
-                                screenTitle = searchString;
-                            } else {
-                                option = new PreferencesSearchOptions(searchString, screenTitle, fragment);
-                            }
-
-                            if (key != null) {
-                                option.setPreferencesKey(key);
-                                Timber.e("Add %s", key);
-                            }
-
-                            options.add(option);
+                    if (searchString != null) {
+                        if (parser.getName().equals(PREFERENCE_SCREEN_TAG)) {
+                            screenTitle = searchString;
+                            option.setSearchString(searchString);
+                            option.setFragment(fragment);
+                        } else {
+                            option.setScreenTitle(screenTitle);
+                            option.setSearchString(searchString);
+                            option.setFragment(fragment);
                         }
-                        break;
-                    default:
-                        Timber.e("Unexpected eventType = %s", eventType);
+
+                        if (key != null) {
+                            option.setPreferencesKey(key);
+                        }
+
+                        options.add(option);
+                    }
                 }
                 eventType = parser.next();
             }
 
         } catch (XmlPullParserException | IOException e) {
-            e.printStackTrace();
+            Timber.e(e);
+        } finally {
+            parser.close();
         }
         return options;
     }
 
 
-    private String getAttributeStringValue(AttributeSet attrs, Context context, String namespace,
-                                           String name) {
+    private String getAttributeStringValue(final AttributeSet attrs, final Context context, final String namespace,
+                                           final String name) {
 
-        String value = null;
-        int resId = attrs.getAttributeResourceValue(namespace, name, 0);
+        String value;
+
+        final int resId = attrs.getAttributeResourceValue(namespace, name, 0);
 
         if (resId == 0) {
             value = attrs.getAttributeValue(namespace, name);

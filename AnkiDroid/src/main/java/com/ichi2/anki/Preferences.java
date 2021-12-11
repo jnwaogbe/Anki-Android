@@ -72,13 +72,11 @@ import com.ichi2.utils.AdaptionUtil;
 import com.ichi2.utils.LanguageUtil;
 import com.ichi2.anki.analytics.UsageAnalytics;
 import com.ichi2.utils.VersionUtils;
-//import com.mancj.materialsearchbar.MaterialSearchBar;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.nio.channels.FileChannel;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.HashMap;
@@ -96,7 +94,6 @@ import androidx.annotation.XmlRes;
 import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SearchView;
-import androidx.core.view.MenuItemCompat;
 import androidx.fragment.app.DialogFragment;
 import androidx.fragment.app.Fragment;
 import androidx.preference.CheckBoxPreference;
@@ -356,10 +353,6 @@ public class Preferences extends AnkiActivity {
     // ----------------------------------------------------------------------------
     // Class methods
     // ----------------------------------------------------------------------------
-
-    private List<String> generatePreferencesSearchStrings() {
-        return null;
-    }
 
     /**
      * Loop over every preference in the list and set the summary text
