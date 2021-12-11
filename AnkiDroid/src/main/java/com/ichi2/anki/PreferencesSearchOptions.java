@@ -5,6 +5,7 @@ import androidx.preference.PreferenceFragmentCompat;
 /**
     Preferences Search Options
  */
+// CS427 https://github.com/ankidroid/Anki-Android/issues/8342
 public class PreferencesSearchOptions {
     /**
      * Screen title
@@ -60,37 +61,80 @@ public class PreferencesSearchOptions {
         // Default constructor
     }
 
+
+    /**
+     * Sets PreferenceSearchOptions with given fragment
+     * @param fragment
+     */
+    // CS427 https://github.com/ankidroid/Anki-Android/issues/8342
     public void setFragment(final PreferenceFragmentCompat fragment) {
         this.fragment = fragment;
     }
 
+
+    /**
+     * Gets PreferenceFragmentCompat fragment
+     * @return
+     */
+    // CS427 https://github.com/ankidroid/Anki-Android/issues/8342
     public PreferenceFragmentCompat getFragment() {
         return fragment;
     }
 
+    /**
+     * Sets PreferenceSearchOptions with search string
+     * @param searchString String to use in search suggestions
+     */
+    // CS427 https://github.com/ankidroid/Anki-Android/issues/8342
     public void setSearchString(final String searchString) {
         this.searchString = searchString;
     }
 
+    /**
+     * Gets search string
+     * @return
+     */
+    // CS427 https://github.com/ankidroid/Anki-Android/issues/8342
     public String getSearchString() {
         return searchString;
     }
 
+
+    /**
+     * Sets screen title given string
+     * @param screenTitle
+     */
+    // CS427 https://github.com/ankidroid/Anki-Android/issues/8342
     public void setScreenTitle(final String screenTitle) {
         this.screenTitle = screenTitle;
     }
 
+
+    /**
+     * Gets screen title
+     * @return
+     */
+    // CS427 https://github.com/ankidroid/Anki-Android/issues/8342
     public String getScreenTitle() {
         return screenTitle;
     }
 
 
-    public String getPreferencesKey() {
-        return preferencesKey;
-    }
-
-
+    /**
+     * Sets preference key
+     * @param preferencesKey
+     */
+    // CS427 https://github.com/ankidroid/Anki-Android/issues/8342
     public void setPreferencesKey(final String preferencesKey) {
         this.preferencesKey = preferencesKey;
+    }
+
+    /**
+     * Gets preference key
+     * @return
+     */
+    // CS427 https://github.com/ankidroid/Anki-Android/issues/8342
+    public String getPreferencesKey() {
+        return preferencesKey;
     }
 }

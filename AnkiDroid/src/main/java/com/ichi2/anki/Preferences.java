@@ -208,6 +208,7 @@ public class Preferences extends AnkiActivity {
     // Overridden methods
     // ----------------------------------------------------------------------------
     @Override
+    // CS427 https://github.com/ankidroid/Anki-Android/issues/8342
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.preferences);
@@ -235,6 +236,7 @@ public class Preferences extends AnkiActivity {
 
 
     @Override
+    // CS427 https://github.com/ankidroid/Anki-Android/issues/8342
     public boolean onCreateOptionsMenu(Menu menu) {
         getMenuInflater().inflate(R.menu.preferences_search_bar, menu);
 
@@ -620,7 +622,7 @@ public class Preferences extends AnkiActivity {
 
 
 
-
+    // CS427 https://github.com/ankidroid/Anki-Android/issues/8342
     public abstract static class SettingsFragment extends PreferenceFragmentCompat implements OnSharedPreferenceChangeListener {
         @Override
         public void onCreate(Bundle savedInstanceState) {

@@ -25,6 +25,7 @@ import com.ichi2.anki.Preferences.AdvancedSettingsFragment;
 /**
  * Preferences Search Configuration for generating search suggestions.
  */
+// CS427 https://github.com/ankidroid/Anki-Android/issues/8342
 public class PreferencesSearchConfiguration {
     private final List<PreferencesSearchOptions> searchOptions;
     private final static String PREFERENCE_SCREEN_TAG = "PreferenceScreen";
@@ -71,6 +72,11 @@ public class PreferencesSearchConfiguration {
     }
 
 
+    /**
+     * Returns list of PreferenceSearchOptions to use for Preferences search functionality
+     * @return PreferenceSearchOptions list
+     */
+    // CS427 https://github.com/ankidroid/Anki-Android/issues/8342
     public List<PreferencesSearchOptions> getSearchOptions() {
         return searchOptions;
     }

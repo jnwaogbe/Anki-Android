@@ -17,6 +17,7 @@ import androidx.recyclerview.widget.RecyclerView;
 /**
  * Preferences Search Fragment
  */
+// CS427 https://github.com/ankidroid/Anki-Android/issues/8342
 public class PreferencesSearchFragment extends Fragment implements PreferencesSearchRecyclerAdapter.PreferencesSearchListener {
     /**
      * Preferences Search Recycler Adapter
